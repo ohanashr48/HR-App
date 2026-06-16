@@ -75,9 +75,10 @@ interface HRContextProps {
   deleteDepartment: (id: string) => Promise<void>;
   
   // Holidays Handlers
-  addPublicHoliday: (ph: Omit<PublicHoliday, 'id'>) => void;
-  deletePublicHoliday: (id: string) => void;
-  addExtraPH: (name: string, date: string, category: 'Government' | 'Christian/Catholic' | 'Hindu' | 'Moslem') => void;
+  addPublicHoliday: (ph: Omit<PublicHoliday, 'id'>) => Promise<void>;
+  deletePublicHoliday: (id: string) => Promise<void>;
+  addExtraPH: (name: string, date: string, category: 'Government' | 'Christian/Catholic' | 'Hindu' | 'Moslem') => Promise<void>;
+  clearPublicHolidays: () => Promise<void>;
   addWebOperator: (data: { user_id: string, password: string, role: string, name: string, departmentScope: string, outletScope: string, status: 'Active' | 'Non-active', lastActive: string }) => Promise<void>;
   
   // Schedule handlers
@@ -667,23 +668,47 @@ export const HRProvider: React.FC<{ children: React.ReactNode }> = ({ children }
     setSchedules(nextSchedules);
   };
 
-  const addPublicHoliday = (newPh: Omit<PublicHoliday, 'id'>) => {
+  const addPublicHoliday = async (newPh: Omit<PublicHoliday, 'id'>) => {
     const id = `PH_CUSTOM_${Date.now()}`;
     const completeHoliday: PublicHoliday = { ...newPh, id };
     const nextHolidays = [...publicHolidays, completeHoliday];
     setPublicHolidays(nextHolidays);
     
-    fireStoreSave('public_holidays', id, completeHoliday);
+    try {
+      await fireStoreSave('public_holidays', id, completeHoliday);
+    } catch (err) {
+      console.error(`Failed to save public holiday ${id}:`, err);
+      setPublicHolidays(publicHolidays);
+      throw err;
+    }
   };
 
-  const deletePublicHoliday = (id: string) => {
+  const deletePublicHoliday = async (id: string) => {
     const nextHolidays = publicHolidays.filter(p => p.id !== id);
     setPublicHolidays(nextHolidays);
     
-    fireStoreDelete('public_holidays', id);
+    try {
+      await fireStoreDelete('public_holidays', id);
+    } catch (err) {
+      console.error(`Failed to delete public holiday ${id}:`, err);
+      setPublicHolidays(publicHolidays);
+      throw err;
+    }
   };
 
-  const addExtraPH = (name: string, date: string, category: 'Government' | 'Christian/Catholic' | 'Hindu' | 'Moslem') => {
+  const clearPublicHolidays = async () => {
+    try {
+      const phSnap = await getDocs(collection(db, 'public_holidays'));
+      const deletePromises = phSnap.docs.map((docSnap) => fireStoreDelete('public_holidays', docSnap.id));
+      await Promise.all(deletePromises);
+      setPublicHolidays([]);
+    } catch (err) {
+      console.error('Failed to clear public holidays:', err);
+      throw err;
+    }
+  };
+
+  const addExtraPH = async (name: string, date: string, category: 'Government' | 'Christian/Catholic' | 'Hindu' | 'Moslem') => {
     const id = `PH_EXTRA_${Date.now()}`;
     const completePh = {
       id,
@@ -696,7 +721,13 @@ export const HRProvider: React.FC<{ children: React.ReactNode }> = ({ children }
     const nextHolidays = [...publicHolidays, completePh];
     setPublicHolidays(nextHolidays);
     
-    fireStoreSave('public_holidays', id, completePh);
+    try {
+      await fireStoreSave('public_holidays', id, completePh);
+    } catch (err) {
+      console.error(`Failed to save extra public holiday ${id}:`, err);
+      setPublicHolidays(publicHolidays);
+      throw err;
+    }
   };
 
   const updateSchedule = (
@@ -852,6 +883,7 @@ export const HRProvider: React.FC<{ children: React.ReactNode }> = ({ children }
         addPublicHoliday,
         deletePublicHoliday,
         addExtraPH,
+        clearPublicHolidays,
         addWebOperator,
         
         updateSchedule,

@@ -23,6 +23,7 @@ export const HolidaysPanel: React.FC = () => {
     addPublicHoliday, 
     deletePublicHoliday, 
     addExtraPH,
+    clearPublicHolidays,
     employees,
     userSession
   } = useHR();
@@ -44,6 +45,8 @@ export const HolidaysPanel: React.FC = () => {
     category: 'Government' as HolidayCategory
   });
 
+  const [activeYear, setActiveYear] = useState<number>(2026);
+
   // Success Feedbacks
   const [feedbackMsg, setFeedbackMsg] = useState('');
 
@@ -51,24 +54,33 @@ export const HolidaysPanel: React.FC = () => {
   const isHRorAdmin = userSession?.role === 'HR' || userSession?.role === 'super admin';
 
   // Filtered public holidays
+  const holidayYears = useMemo(() => {
+    const years = Array.from(new Set(publicHolidays.map(ph => ph.year || new Date(ph.date).getFullYear()))).sort((a, b) => b - a);
+    if (!years.includes(activeYear)) {
+      years.unshift(activeYear);
+    }
+    return years;
+  }, [publicHolidays, activeYear]);
+
   const filteredHolidays = useMemo(() => {
     let list = [...publicHolidays];
+    list = list.filter(ph => (ph.year || new Date(ph.date).getFullYear()) === activeYear);
     if (activeCategory !== 'All') {
       list = list.filter(ph => ph.category === activeCategory);
     }
-    // Sort by date ascending
     return list.sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
-  }, [publicHolidays, activeCategory]);
+  }, [publicHolidays, activeCategory, activeYear]);
 
-  // Aggregate counts per division
+  // Aggregate counts per division for selected year
   const counts = useMemo(() => {
+    const yearHolidays = publicHolidays.filter(ph => (ph.year || new Date(ph.date).getFullYear()) === activeYear);
     return {
-      Government: publicHolidays.filter(p => p.category === 'Government').length,
-      'Christian/Catholic': publicHolidays.filter(p => p.category === 'Christian/Catholic').length,
-      Hindu: publicHolidays.filter(p => p.category === 'Hindu').length,
-      Moslem: publicHolidays.filter(p => p.category === 'Moslem').length,
+      Government: yearHolidays.filter(p => p.category === 'Government').length,
+      'Christian/Catholic': yearHolidays.filter(p => p.category === 'Christian/Catholic').length,
+      Hindu: yearHolidays.filter(p => p.category === 'Hindu').length,
+      Moslem: yearHolidays.filter(p => p.category === 'Moslem').length,
     };
-  }, [publicHolidays]);
+  }, [publicHolidays, activeYear]);
 
   // Count employees associated with each holiday
   const getAffectedEmployeesCount = (category: HolidayCategory): number => {
@@ -77,35 +89,54 @@ export const HolidaysPanel: React.FC = () => {
   };
 
   // Add Normal Public Holiday List
-  const handleAddPh = (e: React.FormEvent) => {
+  const handleAddPh = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!newPhForm.name.trim()) return;
 
-    addPublicHoliday({
-      name: newPhForm.name,
-      date: newPhForm.date,
-      category: newPhForm.category,
-      isExtra: false,
-      year: parseInt(newPhForm.date.split('-')[0]) || 2026
-    });
-
-    setNewPhForm({ ...newPhForm, name: '' });
-    triggerFeedback('Hari Libur Nasional berhasil ditambahkan ke database!');
+    try {
+      await addPublicHoliday({
+        name: newPhForm.name,
+        date: newPhForm.date,
+        category: newPhForm.category,
+        isExtra: false,
+        year: parseInt(newPhForm.date.split('-')[0]) || 2026
+      });
+      setNewPhForm({ ...newPhForm, name: '' });
+      triggerFeedback('Hari Libur Nasional berhasil ditambahkan ke database!');
+    } catch (err) {
+      triggerFeedback('Gagal menyimpan Hari Libur Nasional. Cek koneksi atau konfigurasi Firestore.');
+    }
   };
 
   // Add Extra Cutber (Joint Leave) Holiday
-  const handleAddExtraPh = (e: React.FormEvent) => {
+  const handleAddExtraPh = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!extraPhForm.name.trim()) return;
 
-    addExtraPH(
-      extraPhForm.name,
-      extraPhForm.date,
-      extraPhForm.category
-    );
+    try {
+      await addExtraPH(
+        extraPhForm.name,
+        extraPhForm.date,
+        extraPhForm.category
+      );
+      setExtraPhForm({ ...extraPhForm, name: '' });
+      triggerFeedback('Tambahan Cuti Bersama (Extra PH) sukses didistribusikan ke roster!');
+    } catch (err) {
+      triggerFeedback('Gagal menyimpan Extra PH. Cek koneksi atau konfigurasi Firestore.');
+    }
+  };
 
-    setExtraPhForm({ ...extraPhForm, name: '' });
-    triggerFeedback('Tambahan Cuti Bersama (Extra PH) sukses didistribusikan ke roster!');
+  const handleClearHolidays = async () => {
+    if (!confirm('Yakin ingin membersihkan semua public holiday dari database?')) {
+      return;
+    }
+
+    try {
+      await clearPublicHolidays();
+      triggerFeedback('Semua public holiday berhasil dibersihkan.');
+    } catch (err) {
+      triggerFeedback('Gagal membersihkan public holiday. Cek koneksi atau konfigurasi Firestore.');
+    }
   };
 
   const triggerFeedback = (msg: string) => {
@@ -311,22 +342,52 @@ export const HolidaysPanel: React.FC = () => {
             </span>
           </div>
 
-          <div className="flex flex-wrap gap-1">
-            {['All', 'Government', 'Hindu', 'Moslem', 'Christian/Catholic'].map((cat) => (
-              <button
-                key={cat}
-                onClick={() => setActiveCategory(cat as any)}
-                className={`px-3 py-1.5 rounded-lg text-xs font-sans border transition-all ${
-                  activeCategory === cat
-                    ? 'bg-violet-500/15 text-violet-400 border-violet-500'
-                    : 'bg-slate-900 text-slate-400 border-slate-800 hover:text-slate-200'
-                }`}
+          <div className="flex flex-wrap gap-2 items-center">
+            <div className="flex items-center gap-2">
+              <label htmlFor="year-filter" className="text-[10px] font-mono uppercase tracking-wider text-slate-400">
+                Tahun PH
+              </label>
+              <select
+                id="year-filter"
+                value={activeYear}
+                onChange={(e) => setActiveYear(Number(e.target.value))}
+                className="rounded-lg border border-slate-800 bg-slate-900 text-slate-100 text-xs px-2 py-1 outline-none focus:ring-1 focus:ring-cyan-500"
               >
-                {cat === 'All' ? 'Semua PH' : `${cat} PH`}
-              </button>
-            ))}
+                {holidayYears.map((year) => (
+                  <option key={year} value={year}>{year}</option>
+                ))}
+              </select>
+            </div>
+            <div className="flex flex-wrap gap-1">
+              {['All', 'Government', 'Hindu', 'Moslem', 'Christian/Catholic'].map((cat) => (
+                <button
+                  key={cat}
+                  onClick={() => setActiveCategory(cat as any)}
+                  className={`px-3 py-1.5 rounded-lg text-xs font-sans border transition-all ${
+                    activeCategory === cat
+                      ? 'bg-violet-500/15 text-violet-400 border-violet-500'
+                      : 'bg-slate-900 text-slate-400 border-slate-800 hover:text-slate-200'
+                  }`}
+                >
+                  {cat === 'All' ? 'Semua PH' : `${cat} PH`}
+                </button>
+              ))}
+            </div>
           </div>
         </div>
+
+        {isHRorAdmin && (
+          <div className="p-4 bg-slate-950 border border-slate-800 rounded-xl shadow-inner text-right">
+            <button
+              onClick={handleClearHolidays}
+              className="inline-flex items-center justify-center gap-2 rounded-lg border border-rose-600 bg-rose-950/10 px-4 py-2 text-rose-300 text-xs font-semibold hover:bg-rose-950/30 transition-all"
+              title="Bersihkan semua public holiday dari Firestore"
+            >
+              <Trash2 className="w-4 h-4" />
+              Bersihkan Semua PH
+            </button>
+          </div>
+        )}
 
         {/* Holiday Table Grid */}
         <div className="overflow-x-auto">
