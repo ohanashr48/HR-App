@@ -1,0 +1,6 @@
+{
+  "name": "Schedule Karyawan",
+  "description": "Sistem Informasi HR PT. Aqua Nusa Lembongan untuk manajemen database karyawan, jadwal kerja departemen (periode 26 Juni - 25 Juli), dan kalender cuti bersama/hari libur nasional.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

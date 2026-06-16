@@ -1,0 +1,169 @@
+{
+  "entities": {
+    "Employee": {
+      "title": "Employee",
+      "description": "Active contract employee details",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "description": "Unique employee identifier" },
+        "name": { "type": "string", "description": "Full name of the employee" },
+        "position": { "type": "string", "description": "Job description or title" },
+        "startingDate": { "type": "string", "format": "date", "description": "Employee's starting date" },
+        "gender": { "type": "string", "enum": ["Male", "Female"] },
+        "religion": { "type": "string", "enum": ["Hindu", "Moslem", "Christian/Catholic", "Buddhist", "Other"] },
+        "maritalStatus": { "type": "string", "enum": ["Single", "Married", "Divorced"] },
+        "nikPassport": { "type": "string", "description": "NIK or Passport ID" },
+        "noKK": { "type": "string", "description": "KK number" },
+        "noHandphone": { "type": "string", "description": "Phone number" },
+        "noBpjsKes": { "type": "string", "description": "BPJS Kesehatan number" },
+        "noBpjsTk": { "type": "string", "description": "BPJS Ketenagakerjaan number" },
+        "birthPlace": { "type": "string" },
+        "birthDate": { "type": "string", "format": "date" },
+        "motherFullName": { "type": "string" },
+        "lastEducation": { "type": "string" },
+        "address": { "type": "string" },
+        "email": { "type": "string" },
+        "emergencyContact": { "type": "string" },
+        "relationship": { "type": "string" },
+        "references": { "type": "string" },
+        "alBalance": { "type": "number" },
+        "dpBalance": { "type": "number" },
+        "signDate": { "type": "string", "format": "date" },
+        "contractEndDate": { "type": "string", "format": "date" },
+        "outletId": { "type": "string" },
+        "departmentId": { "type": "string" }
+      },
+      "required": ["id", "name", "position", "startingDate", "gender", "religion", "maritalStatus", "nikPassport", "outletId", "departmentId"]
+    },
+    "ResignedEmployee": {
+      "title": "Resigned Employee",
+      "description": "Details of employees who have resigned from PT Aqua Nusa",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "name": { "type": "string" },
+        "position": { "type": "string" },
+        "startingDate": { "type": "string", "format": "date" },
+        "resignationDate": { "type": "string", "format": "date", "description": "Date they resigned" },
+        "reason": { "type": "string" },
+        "gender": { "type": "string" },
+        "religion": { "type": "string" },
+        "outletId": { "type": "string" },
+        "departmentId": { "type": "string" }
+      },
+      "required": ["id", "name", "resignationDate", "outletId", "departmentId"]
+    },
+    "TraineeEmployee": {
+      "title": "Trainee Employee",
+      "description": "Staff in training phase",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "name": { "type": "string" },
+        "position": { "type": "string" },
+        "startingDate": { "type": "string", "format": "date" },
+        "durationMonths": { "type": "number" },
+        "gender": { "type": "string" },
+        "religion": { "type": "string" },
+        "outletId": { "type": "string" },
+        "departmentId": { "type": "string" }
+      },
+      "required": ["id", "name", "startingDate", "outletId", "departmentId"]
+    },
+    "ProbationEmployee": {
+      "title": "Probation Employee",
+      "description": "Staff on probation period",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "name": { "type": "string" },
+        "position": { "type": "string" },
+        "startingDate": { "type": "string", "format": "date" },
+        "probationEndDate": { "type": "string", "format": "date" },
+        "gender": { "type": "string" },
+        "religion": { "type": "string" },
+        "outletId": { "type": "string" },
+        "departmentId": { "type": "string" }
+      },
+      "required": ["id", "name", "startingDate", "outletId", "departmentId"]
+    },
+    "Outlet": {
+      "title": "Outlet",
+      "description": "Outlet location details",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "name": { "type": "string" }
+      },
+      "required": ["id", "name"]
+    },
+    "Department": {
+      "title": "Department",
+      "description": "Company departments",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "name": { "type": "string" }
+      },
+      "required": ["id", "name"]
+    },
+    "PublicHoliday": {
+      "title": "Public Holiday",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "name": { "type": "string" },
+        "date": { "type": "string", "format": "date" },
+        "category": { "type": "string" },
+        "isExtra": { "type": "boolean" },
+        "year": { "type": "number" }
+      },
+      "required": ["id", "name", "date", "category", "isExtra", "year"]
+    },
+    "DepartmentSchedule": {
+      "title": "Department Schedule",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "periodId": { "type": "string" },
+        "departmentId": { "type": "string" },
+        "entries": { "type": "object" }
+      },
+      "required": ["id", "periodId", "departmentId", "entries"]
+    }
+  },
+  "firestore": {
+    "/employees/{id}": {
+      "schema": "Employee",
+      "description": "Active staff collection"
+    },
+    "/resigned_employees/{id}": {
+      "schema": "ResignedEmployee",
+      "description": "Special table/collection for resigned employees"
+    },
+    "/trainee_employees/{id}": {
+      "schema": "TraineeEmployee",
+      "description": "Special table/collection for trainees"
+    },
+    "/probation_employees/{id}": {
+      "schema": "ProbationEmployee",
+      "description": "Special table/collection for probation staff"
+    },
+    "/outlets/{id}": {
+      "schema": "Outlet",
+      "description": "Locations"
+    },
+    "/departments/{id}": {
+      "schema": "Department",
+      "description": "Business departments"
+    },
+    "/public_holidays/{id}": {
+      "schema": "PublicHoliday",
+      "description": "List of calendar public holidays"
+    },
+    "/schedules/{id}": {
+      "schema": "DepartmentSchedule",
+      "description": "Schedules for periods and departments"
+    }
+  }
+}

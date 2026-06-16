@@ -1,0 +1,333 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500;700&display=swap');
+@import "tailwindcss";
+
+@theme {
+  --font-sans: 'Inter', ui-sans-serif, system-ui, -apple-system, sans-serif;
+  --font-mono: 'JetBrains Mono', monospace;
+}
+
+/* ======================================================= */
+/* HIGH DENSITY THEME BASE AND CONTRAST STYLING            */
+/* ======================================================= */
+body {
+  font-family: var(--font-sans);
+  background-color: #f1f5f9; /* Soft, warm slate-100 backdrop */
+  color: #0f172a;           /* Dark slate-900 high contrast text */
+  font-feature-settings: "cv02", "cv03", "cv04", "cv11";
+}
+
+/* Elegant fade-in transition rules */
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(4px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.animate-fade-in {
+  animation: fadeIn 0.15s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+/* Scrollbar styling for high-density tables */
+::-webkit-scrollbar {
+  width: 5px;
+  height: 5px;
+}
+::-webkit-scrollbar-track {
+  background: #f1f5f9;
+}
+::-webkit-scrollbar-thumb {
+  background: #cbd5e1;
+  border-radius: 3px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: #94a3b8;
+}
+
+/* ======================================================= */
+/* CLASS MAPPER: AUTO-TRANSFORM DARK WRAPPERS TO LIGHT     */
+/* ======================================================= */
+
+/* 1. Main Content Containers (skip global to let Sidebar stay dark) */
+main, 
+.workspace-content,
+[role="dialog"],
+#modal-root,
+.modal-overlay,
+.high-density-light {
+}
+
+/* Cards & Panels: Convert Slate-900 to white border boxes */
+main .bg-slate-900,
+[role="dialog"] .bg-slate-900,
+.modal-overlay .bg-slate-900,
+div[id*="modal"] .bg-slate-900,
+main .bg-slate-950\/10 {
+  background-color: #ffffff !important;
+  border-color: #e2e8f0 !important; /* Soft gray border line */
+  color: #0f172a !important;
+  box-shadow: 0 1px 2px 0 rgba(0, 0, 0, 0.05), 0 1px 3px 0 rgba(0, 0, 0, 0.03) !important;
+}
+
+/* Base list containers & Inputs: Slate-950 to soft slate-50/100 */
+main .bg-slate-950,
+main .bg-slate-950\/40,
+main .bg-slate-950\/50,
+main .bg-slate-950\/60,
+[role="dialog"] .bg-slate-950,
+[role="dialog"] .bg-slate-950\/60,
+.modal-overlay .bg-slate-950,
+div[id*="modal"] .bg-slate-950 {
+  background-color: #f8fafc !important; /* Crisp slate-50 background */
+  border-color: #cbd5e1 !important; /* Sizable frame slate-300 */
+  color: #0f172a !important;
+}
+
+/* Highlight specific background exceptions (e.g. nested lists in DB or Holiday) */
+main .bg-slate-900\/40 {
+  background-color: #f1f5f9 !important;
+  border-color: #cbd5e1 !important;
+}
+
+/* 2. Text Override Mapping */
+main .text-white,
+[role="dialog"] .text-white,
+div[id*="modal"] .text-white {
+  color: #0f172a !important; /* Rich black text */
+}
+
+main .text-slate-100,
+[role="dialog"] .text-slate-100 {
+  color: #1e293b !important;
+}
+
+main .text-slate-200,
+[role="dialog"] .text-slate-200 {
+  color: #334155 !important;
+}
+
+main .text-slate-300,
+[role="dialog"] .text-slate-300 {
+  color: #475569 !important;
+}
+
+main .text-slate-400,
+main .text-slate-500,
+[role="dialog"] .text-slate-400,
+[role="dialog"] .text-slate-500 {
+  color: #64748b !important; /* Neutral muted steel color */
+}
+
+/* 3. High-Contrast Sky Access / Cyan Accent Mapping */
+main .text-cyan-400,
+[role="dialog"] .text-cyan-400 {
+  color: #0284c7 !important; /* Sky 600 */
+}
+
+main .text-indigo-400,
+[role="dialog"] .text-indigo-400 {
+  color: #4f46e5 !important; /* Indigo 600 */
+}
+
+main .text-emerald-400,
+[role="dialog"] .text-emerald-400 {
+  color: #16a34a !important; /* Emerald 600 */
+}
+
+main .text-amber-400,
+[role="dialog"] .text-amber-400 {
+  color: #b45309 !important; /* Amber 700 */
+}
+
+/* 4. Form Fields & Action Controls */
+main input,
+main select,
+main textarea,
+[role="dialog"] input,
+[role="dialog"] select,
+[role="dialog"] textarea {
+  background-color: #ffffff !important;
+  color: #0f172a !important;
+  border: 1px solid #cbd5e1 !important;
+  border-radius: 4px !important;
+  padding-top: 0.35rem !important;
+  padding-bottom: 0.35rem !important;
+  font-size: 0.8125rem !important; /* Tight text-xs size */
+  transition: all 0.15s ease !important;
+}
+
+main input:focus,
+main select:focus,
+[role="dialog"] input:focus,
+[role="dialog"] select:focus {
+  border-color: #0284c7 !important; /* Sky-600 focus ring */
+  outline: none !important;
+  box-shadow: 0 0 0 2px rgba(2, 132, 199, 0.15) !important;
+}
+
+/* 5. Clean Borders */
+main .border-slate-800,
+main .border-slate-850,
+main .border-slate-700,
+[role="dialog"] .border-slate-800,
+[role="dialog"] .border-slate-850,
+[role="dialog"] .border-slate-700 {
+  border-color: #e2e8f0 !important; /* Slate 200 grid lines */
+}
+
+/* 6. High Contrast Table Overrides */
+main table {
+  width: 100% !important;
+  border-collapse: collapse !important;
+}
+
+main th {
+  background-color: #f1f5f9 !important;
+  color: #475569 !important;
+  font-size: 11px !important;
+  font-weight: 700 !important;
+  text-transform: uppercase !important;
+  letter-spacing: 0.05em !important;
+  border-bottom: 2px solid #cbd5e1 !important;
+  padding: 0.5rem 0.6rem !important;
+}
+
+main td {
+  padding: 0.45rem 0.6rem !important;
+  font-size: 12px !important;
+  border-bottom: 1px solid #e2e8f0 !important;
+}
+
+main tr:hover td {
+  background-color: #f8fafc !important;
+}
+
+/* High density button tweaks */
+main button,
+[role="dialog"] button {
+  font-size: 12px !important;
+  border-radius: 4px !important;
+  transition: all 0.12s ease !important;
+}
+
+/* Standard Secondary button conversion */
+main button.bg-slate-950,
+main button.bg-slate-800,
+[role="dialog"] button.bg-slate-950 {
+  background-color: #ffffff !important;
+  border: 1px solid #cbd5e1 !important;
+  color: #334155 !important;
+}
+main button.bg-slate-950:hover,
+main button.bg-slate-800:hover,
+[role="dialog"] button.bg-slate-950:hover {
+  background-color: #f8fafc !important;
+  border-color: #94a3b8 !important;
+  color: #0f172a !important;
+}
+
+/* Welcome banner styling - keeping beautiful color tones but making text high contrast */
+main .bg-gradient-to-r {
+  background: linear-gradient(135deg, #0f172a 0%, #1e293b 50%, #0369a1 100%) !important;
+  border: none !important;
+}
+main .bg-gradient-to-r * {
+  color: #ffffff !important; /* keep text inside gradient container white/readable */
+}
+main .bg-gradient-to-r span {
+  background-color: rgba(255, 255, 255, 0.15) !important;
+  border-color: rgba(255, 255, 255, 0.25) !important;
+}
+
+/* Modal glass backdrop */
+.modal-overlay,
+div[class*="backdrop"] {
+  background-color: rgba(15, 23, 42, 0.4) !important; /* Modern soft gray glass backdrop */
+  backdrop-filter: blur(2px) !important;
+}
+
+/* Additional specificity for holiday items */
+main .bg-gradient-to-r.from-amber-950\/20 {
+  background: #fef3c7 !important; /* Amber-100 accent */
+  border-color: #f59e0b !important; /* Amber-500 border for extra PH */
+  color: #78350f !important;
+}
+main .bg-gradient-to-r.from-amber-950\/20 * {
+  color: #78350f !important;
+}
+
+/* Badges styling adjustments */
+main .bg-cyan-950\/60,
+[role="dialog"] .bg-cyan-950\/60 {
+  background-color: #e0f2fe !important; /* Sky-100 */
+  color: #0369a1 !important; /* Sky-700 */
+  border-color: #bae6fd !important;
+}
+
+main .bg-orange-950\/60,
+[role="dialog"] .bg-orange-950\/60 {
+  background-color: #ffedd5 !important; /* Orange-100 */
+  color: #c2410c !important; /* Orange-700 */
+  border-color: #fed7aa !important;
+}
+
+main .bg-emerald-950\/60,
+[role="dialog"] .bg-emerald-950\/60 {
+  background-color: #dcfce7 !important; /* Emerald-100 */
+  color: #15803d !important; /* Emerald-700 */
+  border-color: #bbf7d0 !important;
+}
+
+main .bg-violet-950\/60,
+[role="dialog"] .bg-violet-950\/60 {
+  background-color: #f3e8ff !important; /* Purple-100 */
+  color: #7e22ce !important; /* Purple-700 */
+  border-color: #e9d5ff !important;
+}
+
+/* Department chips in roster */
+main .bg-cyan-950 {
+  background-color: #e0f2fe !important;
+  color: #0369a1 !important;
+}
+main .bg-blue-950 {
+  background-color: #dbeafe !important;
+  color: #1d4ed8 !important;
+}
+main .bg-purple-950 {
+  background-color: #f3e8ff !important;
+  color: #7e22ce !important;
+}
+main .bg-emerald-950 {
+  background-color: #dcfce7 !important;
+  color: #15803d !important;
+}
+main .bg-amber-950 {
+  background-color: #fef3c7 !important;
+  color: #b45309 !important;
+}
+
+/* Custom class to override global select box layout inside scheduling table cells */
+select.schedule-cell-select {
+  background-color: transparent !important;
+  border: none !important;
+  border-width: 0 !important;
+  box-shadow: none !important;
+  outline: none !important;
+  padding: 0 !important;
+  border-radius: 0 !important;
+  width: 100% !important;
+  height: 100% !important;
+  text-align: center !important;
+  text-align-last: center !important;
+  appearance: none !important;
+  -webkit-appearance: none !important;
+  -moz-appearance: none !important;
+  cursor: pointer !important;
+}
+select.schedule-cell-select:focus,
+select.schedule-cell-select:active {
+  border: none !important;
+  border-width: 0 !important;
+  outline: none !important;
+  box-shadow: none !important;
+}
+
