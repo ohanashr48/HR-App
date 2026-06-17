@@ -6,6 +6,7 @@
 import React, { useState, useMemo } from 'react';
 import { useHR } from '../context/HRContext';
 import { HolidayCategory } from '../types';
+import { getDefaultPublicHolidayCategory } from '../utils/initialData';
 import { 
   Calendar, 
   Plus, 
@@ -84,8 +85,7 @@ export const HolidaysPanel: React.FC = () => {
 
   // Count employees associated with each holiday
   const getAffectedEmployeesCount = (category: HolidayCategory): number => {
-    if (category === 'Government') return employees.length;
-    return employees.filter(e => e.religion === category).length;
+    return employees.filter(e => (e.publicHolidayCategory ?? getDefaultPublicHolidayCategory(e.religion)) === category).length;
   };
 
   // Add Normal Public Holiday List
@@ -397,7 +397,7 @@ export const HolidaysPanel: React.FC = () => {
                 <th className="p-3">NAMA HARI LIBUR / EVENT</th>
                 <th className="p-3">TANGGAL LIBUR</th>
                 <th className="p-3">KATEGORI UTAMA</th>
-                <th className="p-3">SISTEM IMPLEMENTASI AGAMA</th>
+                <th className="p-3">SISTEM IMPLEMENTASI</th>
                 <th className="p-3 text-center">AFFECTED STAFF</th>
                 <th className="p-3">STATUS KHUSUS</th>
                 {isHRorAdmin && <th className="p-3 text-right">AKSI</th>}
@@ -424,19 +424,19 @@ export const HolidaysPanel: React.FC = () => {
                         {ph.date}
                       </td>
                       <td className="p-3">
-                        <span className={`text-[10px] font-mono px-2 py-0.5 rounded border uppercase font-semibold ${
-                          ph.category === 'Government' ? 'bg-cyan-950/60 text-cyan-400 border-cyan-800/40' :
-                          ph.category === 'Hindu' ? 'bg-orange-950/50 text-orange-400 border-orange-800/30' :
-                          ph.category === 'Moslem' ? 'bg-emerald-950/50 text-emerald-400 border-emerald-800/30' :
-                          'bg-violet-950/50 text-violet-400 border-violet-800/30'
+                        <span className={`text-[10px] font-mono uppercase font-semibold ${
+                          ph.category === 'Government' ? 'text-cyan-400' :
+                          ph.category === 'Hindu' ? 'text-orange-400' :
+                          ph.category === 'Moslem' ? 'text-emerald-400' :
+                          'text-violet-400'
                         }`}>
                           {ph.category}
                         </span>
                       </td>
                       <td className="p-3 text-slate-350">
                         {ph.category === 'Government' 
-                          ? 'Diberikan ke Seluruh Karyawan' 
-                          : `Hanya untuk Agama ${ph.category}`
+                          ? 'Tidak otomatis berlaku ke seluruh karyawan' 
+                          : `Hanya untuk grup PH ${ph.category}`
                         }
                       </td>
                       <td className="p-3 text-center font-mono">

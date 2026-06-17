@@ -16,6 +16,7 @@ export interface Employee {
   startingDate: string; // YYYY-MM-DD
   gender: GenderType;
   religion: ReligionType;
+  publicHolidayCategory?: HolidayCategory;
   maritalStatus: MaritalStatusType;
   nikPassport: string;
   noKK: string;

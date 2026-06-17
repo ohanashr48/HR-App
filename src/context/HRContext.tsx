@@ -15,7 +15,8 @@ import {
   SchedulePeriod,
   ResignedEmployee,
   TraineeEmployee,
-  ProbationEmployee
+  ProbationEmployee,
+  HolidayCategory
 } from '../types';
 import {
   INITIAL_EMPLOYEES,
@@ -28,7 +29,8 @@ import {
   generateInitialSchedule,
   calculateEmployeePublicHolidaysCount,
   calculateMonthsWorked,
-  calculateRosterStats
+  calculateRosterStats,
+  getDefaultPublicHolidayCategory
 } from '../utils/initialData';
 import { db, handleFirestoreError, OperationType } from '../lib/firebase';
 import { collection, getDocs, doc, setDoc, deleteDoc } from 'firebase/firestore';
@@ -318,7 +320,7 @@ export const HRProvider: React.FC<{ children: React.ReactNode }> = ({ children }
   };
 
   const getPHCount = (emp: Employee): number => {
-    return calculateEmployeePublicHolidaysCount(emp.religion, publicHolidays);
+    return calculateEmployeePublicHolidaysCount(emp.publicHolidayCategory ?? getDefaultPublicHolidayCategory(emp.religion), publicHolidays);
   };
 
   const getCombinedALDPCount = (emp: Employee): number => {
@@ -752,9 +754,9 @@ export const HRProvider: React.FC<{ children: React.ReactNode }> = ({ children }
 
         const updatedDates = { ...employeeEntry.dates, [dateStr]: shiftVal };
         const employeeObj = employees.find(e => e.id === employeeId);
-        const religion = employeeObj ? employeeObj.religion : 'Other';
+        const publicHolidayCategory = employeeObj?.publicHolidayCategory ?? getDefaultPublicHolidayCategory(employeeObj?.religion ?? 'Other');
 
-        const stats = calculateRosterStats(updatedDates, religion, publicHolidays);
+        const stats = calculateRosterStats(updatedDates, publicHolidayCategory, publicHolidays);
 
         const updatedEntry = {
           ...employeeEntry,

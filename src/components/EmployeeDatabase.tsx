@@ -5,8 +5,9 @@
 
 import React, { useState, useMemo } from 'react';
 import { useHR } from '../context/HRContext';
-import { Employee, ReligionType, GenderType, MaritalStatusType } from '../types';
+import { Employee, ReligionType, GenderType, MaritalStatusType, HolidayCategory } from '../types';
 import { exportEmployeesToCSV, parsePastedEmployees, downloadFile } from '../utils/excel';
+import { getDefaultPublicHolidayCategory } from '../utils/initialData';
 import { 
   Users, 
   Search, 
@@ -78,6 +79,7 @@ export const EmployeeDatabase: React.FC = () => {
     startingDate: '2026-01-01',
     gender: 'Male' as GenderType,
     religion: 'Hindu' as ReligionType,
+    publicHolidayCategory: 'Hindu' as HolidayCategory,
     maritalStatus: 'Single' as MaritalStatusType,
     nikPassport: '',
     noKK: '',
@@ -231,6 +233,7 @@ export const EmployeeDatabase: React.FC = () => {
       startingDate: emp.startingDate,
       gender: emp.gender,
       religion: emp.religion,
+      publicHolidayCategory: emp.publicHolidayCategory ?? getDefaultPublicHolidayCategory(emp.religion),
       maritalStatus: emp.maritalStatus,
       nikPassport: emp.nikPassport,
       noKK: emp.noKK,
@@ -338,6 +341,7 @@ export const EmployeeDatabase: React.FC = () => {
               setIsEditing(false);
               setSingleForm({
                 name: '', position: 'Staff', startingDate: '2026-06-15', gender: 'Male', religion: 'Hindu', maritalStatus: 'Single',
+                publicHolidayCategory: 'Hindu',
                 nikPassport: '', noKK: '', noHandphone: '', noBpjsKes: '', noBpjsTk: '', birthPlace: '', birthDate: '1995-01-01',
                 motherFullName: '', lastEducation: 'SMA', address: '', email: '', emergencyContact: '', relationship: '', references: '',
                 alBalance: 12, dpBalance: 0, signDate: '2026-06-15', contractEndDate: '2027-06-15', outletId: 'O1', departmentId: 'D1'
@@ -496,7 +500,7 @@ export const EmployeeDatabase: React.FC = () => {
                   <th className="p-3">DEPARTEMEN</th>
                   <th className="p-3">GENDER / AGAMA</th>
                   <th className="p-3 text-center">AL ACCRUED (BACKSTAGE)</th>
-                  <th className="p-3 text-center">PH (RELIGION CALC)</th>
+                  <th className="p-3 text-center">PH (PUBLIC HOLIDAY)</th>
                   <th className="p-3 text-center">AL+DP TOTAL BALANCE</th>
                   <th className="p-3 text-center">TMT KONTRAK SELESAI</th>
                   <th className="p-3 text-right">AKSI ADMINISTRATOR</th>
@@ -512,7 +516,7 @@ export const EmployeeDatabase: React.FC = () => {
                 ) : (
                   filteredEmployees.map((emp) => {
                     const accruedAL = getAccruedALCount(emp);
-                    const religionPH = getPHCount(emp);
+                    const publicHolidayPH = getPHCount(emp);
                     const totalALDP = getCombinedALDPCount(emp);
                     const isSoonExpiring = new Date(emp.contractEndDate).getTime() - new Date('2026-06-15').getTime() < 30 * 24 * 60 * 60 * 1000;
 
@@ -545,7 +549,7 @@ export const EmployeeDatabase: React.FC = () => {
                         </td>
                         <td className="p-3 text-center">
                           <span className="font-semibold font-mono text-xs text-indigo-650">
-                            {religionPH} PH
+                            {publicHolidayPH} PH
                           </span>
                         </td>
                         <td className="p-3 text-center">
@@ -827,9 +831,9 @@ export const EmployeeDatabase: React.FC = () => {
                   <p className="text-[8px] text-slate-500 mt-0.5 font-sans leading-none">dari tgl masuk</p>
                 </div>
                 <div className="p-2 bg-slate-900/50 border border-slate-850 rounded-lg">
-                  <span className="block text-[9px] font-mono text-slate-450 uppercase mb-0.5">Religion PH</span>
+                  <span className="block text-[9px] font-mono text-slate-450 uppercase mb-0.5">Public Holiday PH</span>
                   <span className="font-bold text-white text-base">{getPHCount(previewEmp)} PH</span>
-                  <p className="text-[8px] text-slate-500 mt-0.5 font-sans leading-none">berdasarkan agama</p>
+                  <p className="text-[8px] text-slate-500 mt-0.5 font-sans leading-none">berdasarkan pilihan PH</p>
                 </div>
                 <div className="p-2 bg-slate-900/50 border border-slate-850 rounded-lg">
                   <span className="block text-[9px] font-mono text-slate-405 uppercase mb-0.5">Sisa AL+DP</span>
@@ -1138,7 +1142,7 @@ export const EmployeeDatabase: React.FC = () => {
                     </select>
                   </div>
                   <div>
-                    <label className="block text-[10px] font-bold text-slate-400 mb-1">AGAMA (PENTING KALENDER PH)</label>
+                    <label className="block text-[10px] font-bold text-slate-400 mb-1">AGAMA</label>
                     <select
                       value={singleForm.religion}
                       onChange={(e) => setSingleForm({ ...singleForm, religion: e.target.value as ReligionType })}
@@ -1149,6 +1153,19 @@ export const EmployeeDatabase: React.FC = () => {
                       <option value="Christian/Catholic">Christian/Catholic (PH Natal Sesuai)</option>
                       <option value="Buddhist">Buddhist</option>
                       <option value="Other">Other (Hanya PH Umum)</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label className="block text-[10px] font-bold text-slate-400 mb-1">PILIHAN PUBLIC HOLIDAY</label>
+                    <select
+                      value={singleForm.publicHolidayCategory}
+                      onChange={(e) => setSingleForm({ ...singleForm, publicHolidayCategory: e.target.value as HolidayCategory })}
+                      className="w-full bg-slate-900 text-white border border-slate-800 rounded p-2 focus:ring-1 focus:ring-cyan-500 outline-none font-bold text-cyan-400"
+                    >
+                      <option value="Government">Government PH</option>
+                      <option value="Hindu">Hindu PH</option>
+                      <option value="Moslem">Moslem PH</option>
+                      <option value="Christian/Catholic">Christian/Catholic PH</option>
                     </select>
                   </div>
                   <div>

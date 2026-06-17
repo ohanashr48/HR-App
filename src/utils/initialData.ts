@@ -3,7 +3,20 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import { Employee, PublicHoliday, Outlet, Department, DepartmentSchedule, ResignedEmployee, TraineeEmployee, ProbationEmployee } from '../types';
+import { Employee, PublicHoliday, Outlet, Department, DepartmentSchedule, ResignedEmployee, TraineeEmployee, ProbationEmployee, HolidayCategory, ReligionType } from '../types';
+
+export function getDefaultPublicHolidayCategory(religion: ReligionType): HolidayCategory {
+  switch (religion) {
+    case 'Hindu':
+      return 'Hindu';
+    case 'Moslem':
+      return 'Moslem';
+    case 'Christian/Catholic':
+      return 'Christian/Catholic';
+    default:
+      return 'Government';
+  }
+}
 
 export const INITIAL_OUTLETS: Outlet[] = [
   { id: 'O1', name: 'Lembongan Main Office' },
@@ -429,34 +442,17 @@ export function calculateMonthsWorked(startDateStr: string, asOfDateStr: string 
 }
 
 /**
- * Gets the number of holidays applicable to an employee based on their religion in 2026.
- * Rule: Government holidays apply to EVERY employee, and division-specific holidays apply to employees of that religion.
+ * Gets the number of holidays applicable to an employee based on the employee's assigned PH group in 2026.
  */
-export function calculateEmployeePublicHolidaysCount(religion: string, holidays: PublicHoliday[]): number {
-  let count = 0;
-  holidays.forEach(h => {
-    // Government is for everyone
-    if (h.category === 'Government') {
-      count++;
-    } else if (h.category === 'Christian/Catholic' && religion === 'Christian/Catholic') {
-      count++;
-    } else if (h.category === 'Hindu' && religion === 'Hindu') {
-      count++;
-    } else if (h.category === 'Moslem' && religion === 'Moslem') {
-      count++;
-    }
-  });
-  return count;
+export function calculateEmployeePublicHolidaysCount(publicHolidayCategory: HolidayCategory, holidays: PublicHoliday[]): number {
+  return holidays.filter(h => h.category === publicHolidayCategory).length;
 }
 
 /**
- * Checks if a specific date is a Public Holiday applicable to this employee based on religion
+ * Checks if a specific date is a Public Holiday applicable to this employee based on assigned PH group.
  */
-export function isDatePHForEmployee(dateStr: string, religion: string, holidays: PublicHoliday[]): boolean {
-  return holidays.some(h => {
-    if (h.date !== dateStr) return false;
-    return h.category === 'Government' || h.category === religion;
-  });
+export function isDatePHForEmployee(dateStr: string, publicHolidayCategory: HolidayCategory, holidays: PublicHoliday[]): boolean {
+  return holidays.some(h => h.date === dateStr && h.category === publicHolidayCategory);
 }
 
 /**
@@ -464,7 +460,7 @@ export function isDatePHForEmployee(dateStr: string, religion: string, holidays:
  */
 export function calculateRosterStats(
   dates: { [dateStr: string]: string },
-  religion: string,
+  publicHolidayCategory: HolidayCategory,
   holidays: PublicHoliday[]
 ) {
   let alMinus = 0;
@@ -478,7 +474,7 @@ export function calculateRosterStats(
       dpMinus++;
     } else if (shiftVal !== 'OFF' && shiftVal !== '') {
       // Karyawan kerja (not OFF, not AL, not DP)
-      if (isDatePHForEmployee(dateStr, religion, holidays)) {
+      if (isDatePHForEmployee(dateStr, publicHolidayCategory, holidays)) {
         dpPlus++;
       }
     }
@@ -524,7 +520,7 @@ export function generateInitialSchedule(employees: Employee[], departmentId: str
     });
 
     // Calculate initial dynamic stats using the real rules
-    const stats = calculateRosterStats(datesData, emp.religion, holidaysReference);
+    const stats = calculateRosterStats(datesData, emp.publicHolidayCategory ?? getDefaultPublicHolidayCategory(emp.religion), holidaysReference);
     
     entries[emp.id] = {
       employeeId: emp.id,
