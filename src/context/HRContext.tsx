@@ -19,14 +19,6 @@ import {
   HolidayCategory
 } from '../types';
 import {
-  INITIAL_EMPLOYEES,
-  INITIAL_PUBLIC_HOLIDAYS,
-  INITIAL_OUTLETS,
-  INITIAL_DEPARTMENTS,
-  INITIAL_RESIGNED_EMPLOYEES,
-  INITIAL_TRAINEE_EMPLOYEES,
-  INITIAL_PROBATION_EMPLOYEES,
-  generateInitialSchedule,
   calculateEmployeePublicHolidaysCount,
   calculateMonthsWorked,
   calculateRosterStats,
@@ -47,6 +39,7 @@ interface HRContextProps {
   currentPeriod: SchedulePeriod;
   userSession: UserSession | null;
   isAuthenticated: boolean;
+  isLoading: boolean;
   
   // Simulated State Handlers
   setRole: (role: RoleType, departmentId?: string, outletId?: string) => void;
@@ -84,6 +77,11 @@ interface HRContextProps {
   addWebOperator: (data: { user_id: string, password: string, role: string, name: string, departmentScope: string, outletScope: string, status: 'Active' | 'Non-active', lastActive: string }) => Promise<void>;
   
   // Schedule handlers
+  batchUpdateSchedule: (
+    departmentId: string,
+    periodId: string,
+    updates: { employeeId: string; dateStr: string; shiftVal: string }[]
+  ) => void;
   updateSchedule: (departmentId: string, periodId: string, employeeId: string, dateStr: string, shiftVal: string) => void;
   updateScheduleLeaverBalances: (
     departmentId: string,
@@ -93,6 +91,7 @@ interface HRContextProps {
   ) => void;
   
   // System overrides
+  refreshData: () => Promise<void>;
   updateFullDatabase: (rawState: {
     employees: Employee[];
     resignedEmployees: ResignedEmployee[];
@@ -103,7 +102,6 @@ interface HRContextProps {
     outlets: Outlet[];
     departments: Department[];
   }) => void;
-  resetDatabaseToDefault: () => void;
   
   // Calculations helper in context
   getAccruedALCount: (emp: Employee) => number;
@@ -113,7 +111,7 @@ interface HRContextProps {
 
 const HRContext = createContext<HRContextProps | undefined>(undefined);
 
-const LOCAL_STORAGE_KEY = 'aquanusa_hr_state_v2';
+
 
 export const HRProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   // Configured default period: June 26, 2026 to July 25, 2026
@@ -185,58 +183,37 @@ export const HRProvider: React.FC<{ children: React.ReactNode }> = ({ children }
     }
   }, [userSession]);
 
-  // Re-seed or Load State
-  useEffect(() => {
-    loadDefaultMockData();
-  }, []);
-
-  // Sync with Firestore if active
+  // Sync with Firestore as the single source of truth
+  const [isLoading, setIsLoading] = useState(true);
   useEffect(() => {
     const fetchAndSyncFirestore = async () => {
       try {
-        // Load active employees
+        // Load active employees — no seeding if empty
         const empsSnap = await getDocs(collection(db, 'employees'));
         if (!empsSnap.empty) {
           const lEmps = empsSnap.docs.map(d => ({ ...d.data(), id: d.id } as Employee));
           setEmployees(lEmps);
-        } else {
-          // If empty, seed initial data to Firestore
-          for (const emp of INITIAL_EMPLOYEES) {
-            await setDoc(doc(db, 'employees', emp.id), emp);
-          }
         }
 
-        // Load resigned employees
+        // Load resigned employees — no seeding if empty
         const resSnap = await getDocs(collection(db, 'resigned_employees'));
         if (!resSnap.empty) {
           const lRes = resSnap.docs.map(d => ({ ...d.data(), id: d.id } as ResignedEmployee));
           setResignedEmployees(lRes);
-        } else {
-          for (const emp of INITIAL_RESIGNED_EMPLOYEES) {
-            await setDoc(doc(db, 'resigned_employees', emp.id), emp);
-          }
         }
 
-        // Load trainees
+        // Load trainees — no seeding if empty
         const traineeSnap = await getDocs(collection(db, 'trainee_employees'));
         if (!traineeSnap.empty) {
           const lTrn = traineeSnap.docs.map(d => ({ ...d.data(), id: d.id } as TraineeEmployee));
           setTraineeEmployees(lTrn);
-        } else {
-          for (const emp of INITIAL_TRAINEE_EMPLOYEES) {
-            await setDoc(doc(db, 'trainee_employees', emp.id), emp);
-          }
         }
 
-        // Load probation
+        // Load probation — no seeding if empty
         const probSnap = await getDocs(collection(db, 'probation_employees'));
         if (!probSnap.empty) {
           const lPrb = probSnap.docs.map(d => ({ ...d.data(), id: d.id } as ProbationEmployee));
           setProbationEmployees(lPrb);
-        } else {
-          for (const emp of INITIAL_PROBATION_EMPLOYEES) {
-            await setDoc(doc(db, 'probation_employees', emp.id), emp);
-          }
         }
 
         // Load schedules
@@ -268,32 +245,14 @@ export const HRProvider: React.FC<{ children: React.ReactNode }> = ({ children }
         }
 
       } catch (err) {
-        console.warn("Firestore sync offline or terms not completed yet. Carrying on with graceful offline fallback.", err);
+        console.warn("Firestore sync offline or terms not completed yet.", err);
+      } finally {
+        setIsLoading(false);
       }
     };
 
     fetchAndSyncFirestore();
   }, []);
-
-  const loadDefaultMockData = () => {
-    const defaultSchedules = INITIAL_DEPARTMENTS.map(dept =>
-      generateInitialSchedule(INITIAL_EMPLOYEES, dept.id)
-    );
-    
-    setEmployees(INITIAL_EMPLOYEES);
-    setResignedEmployees(INITIAL_RESIGNED_EMPLOYEES);
-    setTraineeEmployees(INITIAL_TRAINEE_EMPLOYEES);
-    setProbationEmployees(INITIAL_PROBATION_EMPLOYEES);
-    setPublicHolidays(INITIAL_PUBLIC_HOLIDAYS);
-    setSchedules(defaultSchedules);
-    setOutlets(INITIAL_OUTLETS);
-    setDepartments(INITIAL_DEPARTMENTS);
-  };
-
-
-  const resetDatabaseToDefault = () => {
-    loadDefaultMockData();
-  };
 
   const login = (role: RoleType) => {
     const session: UserSession = { 
@@ -732,6 +691,50 @@ export const HRProvider: React.FC<{ children: React.ReactNode }> = ({ children }
     }
   };
 
+  const batchUpdateSchedule = (
+    departmentId: string,
+    periodId: string,
+    updates: { employeeId: string; dateStr: string; shiftVal: string }[]
+  ) => {
+    setSchedules(prevSchedules => {
+      const schedIndex = prevSchedules.findIndex(s => s.departmentId === departmentId && s.periodId === periodId);
+      if (schedIndex === -1) return prevSchedules;
+
+      const targetSched = prevSchedules[schedIndex];
+      const nextEntries = { ...targetSched.entries };
+
+      updates.forEach(({ employeeId, dateStr, shiftVal }) => {
+        const employeeEntry = nextEntries[employeeId] || {
+          employeeId,
+          dates: {},
+          alPrev: 12, alMinus: 0, alPlus: 0,
+          dpPrev: 0, dpMinus: 0, dpPlus: 0
+        };
+
+        const updatedDates = { ...employeeEntry.dates, [dateStr]: shiftVal };
+        const employeeObj = employees.find(e => e.id === employeeId);
+        const phCategory = employeeObj?.publicHolidayCategory ?? getDefaultPublicHolidayCategory(employeeObj?.religion ?? 'Other');
+
+        const stats = calculateRosterStats(updatedDates, phCategory, publicHolidays);
+
+        nextEntries[employeeId] = {
+          ...employeeEntry,
+          dates: updatedDates,
+          alMinus: stats.alMinus,
+          dpMinus: stats.dpMinus,
+          dpPlus: stats.dpPlus
+        };
+      });
+
+      const uSched = { ...targetSched, entries: nextEntries };
+      const nextSchedules = [...prevSchedules];
+      nextSchedules[schedIndex] = uSched;
+
+      fireStoreSave('schedules', uSched.id, uSched);
+      return nextSchedules;
+    });
+  };
+
   const updateSchedule = (
     departmentId: string,
     periodId: string,
@@ -824,6 +827,55 @@ export const HRProvider: React.FC<{ children: React.ReactNode }> = ({ children }
     setSchedules(nextSchedules);
   };
 
+  const refreshData = async () => {
+    setIsLoading(true);
+    try {
+      const empsSnap = await getDocs(collection(db, 'employees'));
+      if (!empsSnap.empty) {
+        setEmployees(empsSnap.docs.map(d => ({ ...d.data(), id: d.id } as Employee)));
+      }
+
+      const resSnap = await getDocs(collection(db, 'resigned_employees'));
+      if (!resSnap.empty) {
+        setResignedEmployees(resSnap.docs.map(d => ({ ...d.data(), id: d.id } as ResignedEmployee)));
+      }
+
+      const traineeSnap = await getDocs(collection(db, 'trainee_employees'));
+      if (!traineeSnap.empty) {
+        setTraineeEmployees(traineeSnap.docs.map(d => ({ ...d.data(), id: d.id } as TraineeEmployee)));
+      }
+
+      const probSnap = await getDocs(collection(db, 'probation_employees'));
+      if (!probSnap.empty) {
+        setProbationEmployees(probSnap.docs.map(d => ({ ...d.data(), id: d.id } as ProbationEmployee)));
+      }
+
+      const schedSnap = await getDocs(collection(db, 'schedules'));
+      if (!schedSnap.empty) {
+        setSchedules(schedSnap.docs.map(d => ({ ...d.data(), id: d.id } as DepartmentSchedule)));
+      }
+
+      const outSnap = await getDocs(collection(db, 'outlets'));
+      if (!outSnap.empty) {
+        setOutlets(outSnap.docs.map(d => ({ ...d.data(), id: d.id } as Outlet)));
+      }
+
+      const deptSnap = await getDocs(collection(db, 'departments'));
+      if (!deptSnap.empty) {
+        setDepartments(deptSnap.docs.map(d => ({ ...d.data(), id: d.id } as Department)));
+      }
+
+      const phSnap = await getDocs(collection(db, 'public_holidays'));
+      if (!phSnap.empty) {
+        setPublicHolidays(phSnap.docs.map(d => ({ ...d.data(), id: d.id } as PublicHoliday)));
+      }
+    } catch (err) {
+      console.warn("Refresh from Firestore failed:", err);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
   const updateFullDatabase = (rawState: any) => {
     if (rawState.employees) setEmployees(rawState.employees);
     if (rawState.resignedEmployees) setResignedEmployees(rawState.resignedEmployees);
@@ -857,6 +909,7 @@ export const HRProvider: React.FC<{ children: React.ReactNode }> = ({ children }
         currentPeriod,
         userSession,
         isAuthenticated,
+        isLoading,
         
         login,
         logout,
@@ -888,11 +941,12 @@ export const HRProvider: React.FC<{ children: React.ReactNode }> = ({ children }
         clearPublicHolidays,
         addWebOperator,
         
+        batchUpdateSchedule,
         updateSchedule,
         updateScheduleLeaverBalances,
         
+        refreshData,
         updateFullDatabase,
-        resetDatabaseToDefault,
         
         getAccruedALCount,
         getPHCount,

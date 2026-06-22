@@ -3,19 +3,19 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import React, { useState, useMemo, useEffect } from 'react';
+import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { useHR } from '../context/HRContext';
 import { exportScheduleToCSV, downloadFile, exportScheduleTemplateCSV } from '../utils/excel';
 import { 
   CalendarDays, 
   Download, 
   Clock, 
-  CheckCircle2, 
   HelpCircle, 
   Lock, 
-  Edit3,
-  UserCheck2,
-  CalendarCheck
+  CalendarCheck,
+  Upload,
+  FileText,
+  X
 } from 'lucide-react';
 import { SchedulePeriod } from '../types';
 
@@ -71,6 +71,7 @@ export const SchedulePanel: React.FC = () => {
     departments, 
     outlets,
     currentPeriod, 
+    batchUpdateSchedule,
     userSession, 
     updateSchedule,
     updateScheduleLeaverBalances,
@@ -98,6 +99,13 @@ export const SchedulePanel: React.FC = () => {
     }
     return 'D1'; // Default FO
   });
+
+  // Batch Upload States
+  const [showBatchModal, setShowBatchModal] = useState(false);
+  const [pastedRoster, setPastedRoster] = useState('');
+  const [isImporting, setIsImporting] = useState(false);
+  const [fileName, setFileName] = useState('');
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   // Available departments based on the selected outlet (for outlet-specific department filtering)
   const availableDepartments = useMemo(() => {
@@ -262,12 +270,73 @@ export const SchedulePanel: React.FC = () => {
     );
   };
 
+  // Handle File selection and reading
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    setFileName(file.name);
+    const reader = new FileReader();
+    reader.onload = (event) => {
+      const text = event.target?.result as string;
+      setPastedRoster(text);
+    };
+    reader.readAsText(file);
+  };
+
+  // Process Batch Roster Import from Pasted TSV (Excel)
+  const handleProcessBatchRoster = async () => {
+    if (!pastedRoster.trim()) return;
+    setIsImporting(true);
+    
+    try {
+      const lines = pastedRoster.trim().split(/\r?\n/);
+      if (lines.length < 2) throw new Error("Data tidak valid atau kosong.");
+
+      // Detect Delimiter (Tab for Excel paste, Semicolon/Comma for CSV files)
+      let delimiter = '\t';
+      if (!lines[0].includes('\t') && lines[0].includes(';')) delimiter = ';';
+      if (!lines[0].includes('\t') && lines[0].includes(',')) delimiter = ',';
+
+      const updates: { employeeId: string; dateStr: string; shiftVal: string }[] = [];
+
+      // Header skip, process data rows
+      for (let i = 1; i < lines.length; i++) {
+        const columns = lines[i].split(delimiter);
+        if (columns.length < 4) continue;
+
+        const employeeId = columns[0].trim().replace(/"/g, ''); // Clean quotes if CSV
+        
+        for (let j = 0; j < datesList.length; j++) {
+          const dateStr = datesList[j];
+          const shiftCode = columns[j + 2]?.trim().toUpperCase();
+          if (shiftCode) {
+            updates.push({ employeeId, dateStr, shiftVal: shiftCode });
+          }
+        }
+      }
+
+      if (updates.length > 0) {
+        batchUpdateSchedule(activeDeptId, selectedPeriod.id, updates);
+      }
+
+      alert('Roster berhasil diimpor secara massal!');
+    } catch (err: any) {
+      alert(`Gagal impor: ${err.message}`);
+    } finally {
+      setIsImporting(false);
+      setShowBatchModal(false);
+      setPastedRoster('');
+      setFileName('');
+    }
+  };
+
   // Available Shift Options Definition
   const shiftTypes = [
-    { code: 'OFF', label: 'Off', bg: 'text-slate-450 border-slate-200 bg-slate-50' },
+    { code: 'OFF', label: 'Off', bg: 'text-slate-500 border-slate-200 bg-slate-50' },
     { code: 'AL', label: 'Cuti (AL)', bg: 'text-cyan-600 border-cyan-200 bg-cyan-50' },
-    { code: 'DP', label: 'Delay Pass (DP)', bg: 'text-amber-600 border-amber-200 bg-amber-55' },
-    { code: 'PH', label: 'Merah (PH)', bg: 'text-rose-600 border-rose-250 bg-rose-50' },
+    { code: 'DP', label: 'Delay Pass (DP)', bg: 'text-amber-600 border-amber-200 bg-amber-50' },
+    { code: 'PH', label: 'Merah (PH)', bg: 'text-rose-600 border-rose-200 bg-rose-50' },
     { code: 'A', label: 'Shift A', bg: 'text-slate-700 border-slate-200 bg-slate-50' },
     { code: 'B', label: 'Shift B', bg: 'text-slate-700 border-slate-200 bg-slate-50' },
     { code: 'C', label: 'Shift C', bg: 'text-slate-700 border-slate-200 bg-slate-50' },
@@ -290,7 +359,7 @@ export const SchedulePanel: React.FC = () => {
             <h3 className="text-xl font-sans font-bold text-slate-800 flex items-center gap-2">
               Jadwal & Roster Karyawan
             </h3>
-            <p className="text-slate-550 text-xs mt-0.5 font-medium">
+            <p className="text-slate-500 text-xs mt-0.5 font-medium">
               Acuan Periode Aktif: <span className="font-mono text-indigo-600 font-bold">{selectedPeriod.name}</span> ({selectedPeriod.startDate.split('-').reverse().join('/')} - {selectedPeriod.endDate.split('-').reverse().join('/')})
             </p>
           </div>
@@ -298,6 +367,16 @@ export const SchedulePanel: React.FC = () => {
 
         {/* Export and action triggers */}
         <div className="flex flex-wrap items-center gap-3 self-start md:self-auto">
+          {/* Upload Batch Schedule */}
+          <button
+            id="btn-upload-batch-roster"
+            onClick={() => setShowBatchModal(true)}
+            className="flex items-center space-x-1.5 bg-white hover:bg-slate-50 text-slate-700 font-sans text-xs font-semibold px-3.5 py-2.5 rounded-lg border border-slate-200 shadow-sm transition-all cursor-pointer"
+          >
+            <Upload className="w-4 h-4 text-indigo-600" />
+            <span>Upload Batch Roster</span>
+          </button>
+
           {/* Download Format Batch Schedule */}
           <button
             id="btn-download-schedule-template"
@@ -353,7 +432,7 @@ export const SchedulePanel: React.FC = () => {
           {/* FILTER 2: OUTLET */}
           <div className="space-y-1.5">
             <span className="text-[10px] font-mono font-bold text-slate-500 uppercase tracking-widest flex items-center gap-1.5">
-              <Clock className="w-3.5 h-3.5 text-emerald-650" />
+              <Clock className="w-3.5 h-3.5 text-emerald-600" />
               2. Filter Cabang/Outlet
             </span>
             {userSession?.role === 'head departement' && userSession?.outletId ? (
@@ -392,10 +471,10 @@ export const SchedulePanel: React.FC = () => {
             {userSession?.role === 'head departement' && userSession?.departmentId ? (
               <div className="flex items-center justify-between bg-cyan-50 border border-cyan-100 rounded-xl px-3 py-2 text-xs text-cyan-800 font-bold shrink-0 shadow-sm h-[38px]">
                 <span className="truncate flex items-center gap-1">
-                  <Lock className="w-3.5 h-3.5 text-cyan-650 inline shrink-0" />
+                  <Lock className="w-3.5 h-3.5 text-cyan-600 inline shrink-0" />
                   {departments.find(d => d.id === userSession.departmentId)?.name || userSession.departmentId}
                 </span>
-                <span className="text-[9px] font-mono text-cyan-650 bg-cyan-100 px-1.5 py-0.5 rounded uppercase font-bold shrink-0 font-bold">Locked</span>
+                <span className="text-[9px] font-mono text-cyan-600 bg-cyan-100 px-1.5 py-0.5 rounded uppercase font-bold shrink-0 font-bold">Locked</span>
               </div>
             ) : (
               <select
@@ -466,7 +545,7 @@ export const SchedulePanel: React.FC = () => {
               {/* Header */}
               <thead className="bg-[#f8fafc] sticky top-0 font-mono text-[10px] text-slate-500 border-b border-slate-200 select-none z-30">
                 <tr>
-                  <th className="w-[180px] p-3 border-r border-slate-200 sticky left-0 z-40 bg-[#f8fafc] shadow-[2px_0_5px_rgba(0,0,0,0.02)] text-slate-705 font-bold">KARYAWAN</th>
+                  <th className="w-[180px] p-3 border-r border-slate-200 sticky left-0 z-40 bg-[#f8fafc] shadow-[2px_0_5px_rgba(0,0,0,0.02)] text-slate-700 font-bold">KARYAWAN</th>
                   
                   {/* Calendar columns starting from June 26 to July 25 right after Karyawan */}
                   {datesList.map(dateStr => {
@@ -480,7 +559,7 @@ export const SchedulePanel: React.FC = () => {
                         key={dateStr} 
                         className={`w-[45px] p-2 text-center border-r border-slate-200 font-bold ${
                           isPH ? 'bg-rose-50 text-rose-600 border-rose-200' :
-                          isWeekend ? 'bg-slate-50/60 text-rose-500 font-mono' : 'text-slate-650'
+                          isWeekend ? 'bg-slate-50/60 text-rose-500 font-mono' : 'text-slate-600'
                         }`}
                         title={generalPH ? `${generalPH.name} [PH]` : dateStr}
                       >
@@ -493,17 +572,17 @@ export const SchedulePanel: React.FC = () => {
                   <th className="w-[100px] p-3 text-center border-r border-slate-200 bg-cyan-50/20 text-cyan-700 font-bold">AL PREV</th>
                   <th className="w-[70px] p-3 text-center border-r border-slate-200 text-rose-600 font-bold">AL-</th>
                   <th className="w-[70px] p-2 text-center border-r border-slate-200 text-emerald-600 font-bold">AL+</th>
-                  <th className="w-[90px] p-3 text-center border-r border-slate-200 bg-cyan-50/40 text-cyan-705 font-bold">TOTAL AL</th>
+                  <th className="w-[90px] p-3 text-center border-r border-slate-200 bg-cyan-50/40 text-cyan-700 font-bold">TOTAL AL</th>
                   <th className="w-[100px] p-3 text-center border-r border-slate-200 bg-amber-50/20 text-amber-700 font-bold">DP PREV</th>
                   <th className="w-[70px] p-2 text-center border-r border-slate-200 text-rose-600 font-bold">DP-</th>
                   <th className="w-[70px] p-2 text-center border-r border-slate-200 text-emerald-600 font-bold">DP+</th>
-                  <th className="w-[90px] p-3 text-center border-r border-slate-200 bg-amber-50/40 text-amber-705 font-bold">TOTAL DP</th>
+                  <th className="w-[90px] p-3 text-center border-r border-slate-200 bg-amber-50/40 text-amber-700 font-bold">TOTAL DP</th>
                   <th className="w-[125px] p-3 text-center border-r border-slate-200 bg-slate-50 text-slate-700 font-bold font-mono">TOTAL AL+DP</th>
                 </tr>
               </thead>
               
               {/* Body */}
-              <tbody className="divide-y divide-slate-150 bg-white font-sans text-xs text-slate-700">
+              <tbody className="divide-y divide-slate-200 bg-white font-sans text-xs text-slate-700">
                 {deptEmployees.map(emp => {
                   const entry = activeSchedule.entries[emp.id] || {
                     employeeId: emp.id,
@@ -525,7 +604,7 @@ export const SchedulePanel: React.FC = () => {
                     <tr key={emp.id} className="hover:bg-slate-50/40 transition-colors">
                       
                       {/* Name Card */}
-                      <td className="p-3 border-r border-slate-150 bg-white sticky left-0 z-10 shadow-[2px_0_5px_rgba(0,0,0,0.015)] font-medium">
+                      <td className="p-3 border-r border-slate-200 bg-white sticky left-0 z-10 shadow-[2px_0_5px_rgba(0,0,0,0.015)] font-medium">
                         <div className="flex flex-col">
                           <span className="font-bold text-[12px] text-slate-800 truncate" title={emp.name}>
                             {emp.name}
@@ -556,7 +635,7 @@ export const SchedulePanel: React.FC = () => {
                         // If it's a PH for this employee, highlight the cell border
                         const borderStyle = isEmployeePH 
                           ? 'border border-rose-200 bg-rose-50/10' 
-                          : 'border-r border-slate-150';
+                          : 'border-r border-slate-200';
 
                         return (
                           <td 
@@ -591,34 +670,34 @@ export const SchedulePanel: React.FC = () => {
                       })}
 
                       {/* AL and DP detailed spreadsheet balances columns after dates list */}
-                      <td className="p-3 text-center border-r border-slate-150 bg-cyan-50/10 text-cyan-600 font-mono font-semibold">
+                      <td className="p-3 text-center border-r border-slate-200 bg-cyan-50/10 text-cyan-600 font-mono font-semibold">
                         {entry.alPrev}
                       </td>
-                      <td className="p-3 text-center border-r border-slate-150 text-rose-600 font-mono font-semibold">
+                      <td className="p-3 text-center border-r border-slate-200 text-rose-600 font-mono font-semibold">
                         -{entry.alMinus}
                       </td>
-                      <td className="p-3 text-center border-r border-slate-150 text-emerald-600 font-mono font-semibold">
+                      <td className="p-3 text-center border-r border-slate-200 text-emerald-600 font-mono font-semibold">
                         +{entry.alPlus}
                       </td>
-                      <td className="p-3 text-center border-r border-slate-150 bg-cyan-50/20 text-cyan-705 font-mono font-bold">
+                      <td className="p-3 text-center border-r border-slate-200 bg-cyan-50/20 text-cyan-700 font-mono font-bold">
                         {totalAL}
                       </td>
 
-                      <td className="p-3 text-center border-r border-slate-150 bg-amber-50/10 text-amber-600 font-mono font-semibold">
+                      <td className="p-3 text-center border-r border-slate-200 bg-amber-50/10 text-amber-600 font-mono font-semibold">
                         {entry.dpPrev}
                       </td>
-                      <td className="p-3 text-center border-r border-slate-150 text-rose-600 font-mono font-semibold">
+                      <td className="p-3 text-center border-r border-slate-200 text-rose-600 font-mono font-semibold">
                         -{entry.dpMinus}
                       </td>
-                      <td className="p-3 text-center border-r border-slate-150 text-emerald-600 font-mono font-semibold">
+                      <td className="p-3 text-center border-r border-slate-200 text-emerald-600 font-mono font-semibold">
                         +{entry.dpPlus}
                       </td>
-                      <td className="p-3 text-center border-r border-slate-150 bg-amber-50/20 text-amber-705 font-mono font-bold">
+                      <td className="p-3 text-center border-r border-slate-200 bg-amber-50/20 text-amber-700 font-mono font-bold">
                         {totalDP}
                       </td>
 
                       {/* Combined total */}
-                      <td className="p-3 text-center border-r border-slate-150 bg-[#f8fafc] text-indigo-650 font-mono font-extrabold text-[13px]">
+                      <td className="p-3 text-center border-r border-slate-200 bg-[#f8fafc] text-indigo-600 font-mono font-extrabold text-[13px]">
                         {grandTotal}
                       </td>
 
@@ -655,9 +734,9 @@ export const SchedulePanel: React.FC = () => {
 
       {/* Manual balance override drawer modal */}
       {selectedEmployeeId && (
-        <div className="fixed inset-0 bg-slate-955/60 backdrop-blur-sm flex items-center justify-center z-50 p-4 animate-fade-in">
+        <div className="fixed inset-0 bg-slate-950/60 backdrop-blur-sm flex items-center justify-center z-50 p-4 animate-fade-in">
           <div className="bg-white border border-slate-200 rounded-2xl max-w-md w-full overflow-hidden shadow-2xl">
-            <div className="p-5 bg-slate-50 border-b border-slate-205 flex items-center space-x-2.5">
+            <div className="p-5 bg-slate-50 border-b border-slate-200 flex items-center space-x-2.5">
               <Clock className="w-5 h-5 text-indigo-600" />
               <div>
                 <h4 className="text-sm font-bold text-slate-800 uppercase tracking-tight">
@@ -785,6 +864,91 @@ export const SchedulePanel: React.FC = () => {
                 className="bg-cyan-600 hover:bg-cyan-500 text-white font-sans font-bold px-4 py-2 rounded-lg text-xs shadow-md shadow-cyan-500/10 transition-all cursor-pointer"
               >
                 Simpan Saldo Karyawan
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* BATCH UPLOAD ROSTER MODAL */}
+      {showBatchModal && (
+        <div className="fixed inset-0 bg-slate-950/60 backdrop-blur-sm flex items-center justify-center z-50 p-4 animate-fade-in">
+          <div className="bg-white border border-slate-200 rounded-2xl max-w-2xl w-full overflow-hidden shadow-2xl">
+            <div className="p-5 bg-slate-50 border-b border-slate-200 flex items-center justify-between">
+              <div className="flex items-center space-x-2.5">
+                <Upload className="w-5 h-5 text-indigo-600" />
+                <div>
+                  <h4 className="text-sm font-bold text-slate-800 uppercase tracking-tight">
+                    Upload File Roster (Excel CSV)
+                  </h4>
+                  <p className="text-[10px] text-slate-500 mt-0.5 font-medium">
+                    Pilih file CSV yang sudah diisi menggunakan format template yang tersedia.
+                  </p>
+                </div>
+              </div>
+              <button 
+                onClick={() => { setShowBatchModal(false); setFileName(''); }}
+                className="p-1 rounded-lg text-slate-400 hover:bg-slate-100 hover:text-slate-600 transition-all cursor-pointer"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            <div className="p-5 space-y-4">
+              <div>
+                <label className="block text-[10px] font-bold text-slate-500 mb-2 uppercase tracking-widest font-mono">
+                  PILIH FILE CSV/TEXT
+                </label>
+                
+                <input 
+                  type="file" 
+                  ref={fileInputRef} 
+                  onChange={handleFileChange} 
+                  accept=".csv,.txt" 
+                  className="hidden" 
+                />
+
+                <div 
+                  onClick={() => fileInputRef.current?.click()}
+                  className="border-2 border-dashed border-slate-200 rounded-2xl p-10 flex flex-col items-center justify-center bg-slate-50 hover:bg-slate-100 hover:border-indigo-300 transition-all cursor-pointer group"
+                >
+                  {fileName ? (
+                    <div className="flex flex-col items-center animate-fade-in">
+                      <FileText className="w-12 h-12 text-indigo-500 mb-2" />
+                      <span className="text-xs font-bold text-slate-700">{fileName}</span>
+                      <span className="text-[10px] text-slate-400 mt-1">Klik untuk mengganti file</span>
+                    </div>
+                  ) : (
+                    <>
+                      <Upload className="w-10 h-10 text-slate-300 group-hover:text-indigo-400 mb-3 transition-colors" />
+                      <span className="text-xs font-bold text-slate-600">Klik untuk mencari file</span>
+                      <span className="text-[10px] text-slate-400 mt-1">Format: .csv (Comma/Semicolon Separated)</span>
+                    </>
+                  )}
+                </div>
+              </div>
+
+              <div className="bg-indigo-50 p-3 rounded-lg border border-indigo-100 text-[10.5px] text-indigo-700 flex items-start gap-2.5">
+                <HelpCircle className="w-4 h-4 mt-0.5 flex-shrink-0" />
+                <p>
+                  <strong>Catatan:</strong> Pastikan kolom tanggal pada Excel sama persis dengan periode yang dipilih saat ini. Sistem akan mencocokkan ID Karyawan dan mengisi shift secara otomatis.
+                </p>
+              </div>
+            </div>
+
+            <div className="p-4 bg-slate-50 border-t border-slate-200 flex justify-end space-x-2">
+              <button
+                onClick={() => setShowBatchModal(false)}
+                className="bg-white border border-slate-200 hover:bg-slate-50 text-slate-700 px-4 py-2 rounded-lg text-xs font-semibold shadow-sm transition-all cursor-pointer"
+              >
+                Batalkan
+              </button>
+              <button
+                onClick={handleProcessBatchRoster}
+                disabled={!pastedRoster.trim() || isImporting}
+                className="bg-indigo-600 hover:bg-indigo-500 text-white font-sans font-bold px-5 py-2 rounded-lg text-xs shadow-md shadow-indigo-500/10 transition-all cursor-pointer disabled:opacity-50"
+              >
+                {isImporting ? 'Memproses...' : 'Mulai Impor Roster'}
               </button>
             </div>
           </div>

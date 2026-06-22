@@ -2,12 +2,14 @@ import React, { useState } from 'react';
 import { useHR } from '../context/HRContext';
 import { db, handleFirestoreError, OperationType } from '../lib/firebase';
 import { collection, query, where, getDocs } from 'firebase/firestore';
+import { Eye, EyeOff } from 'lucide-react';
 
 export const LoginPage: React.FC = () => {
   const [userId, setUserId] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
+  const [showPassword, setShowPassword] = useState(false);
   const { login } = useHR();
 
   const handleLogin = async (e: React.FormEvent) => {
@@ -59,13 +61,22 @@ export const LoginPage: React.FC = () => {
           </div>
           <div>
             <label className="block text-sm font-medium text-slate-700">Password</label>
-            <input
-              type="password"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              className="w-full mt-1 p-2 border border-slate-300 rounded-lg"
-              required
-            />
+            <div className="relative mt-1">
+              <input
+                type={showPassword ? "text" : "password"}
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                className="w-full p-2 border border-slate-300 rounded-lg pr-10 outline-none focus:ring-1 focus:ring-sky-500"
+                required
+              />
+              <button
+                type="button"
+                onClick={() => setShowPassword(!showPassword)}
+                className="absolute right-3 top-2.5 text-slate-400 hover:text-slate-600 transition-colors cursor-pointer"
+              >
+                {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
+              </button>
+            </div>
           </div>
           {error && <p className="text-red-500 text-sm italic">{error}</p>}
           <button

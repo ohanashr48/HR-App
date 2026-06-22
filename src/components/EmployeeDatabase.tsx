@@ -7,7 +7,7 @@ import React, { useState, useMemo } from 'react';
 import { useHR } from '../context/HRContext';
 import { Employee, ReligionType, GenderType, MaritalStatusType, HolidayCategory } from '../types';
 import { exportEmployeesToCSV, parsePastedEmployees, downloadFile } from '../utils/excel';
-import { getDefaultPublicHolidayCategory } from '../utils/initialData';
+import { getDefaultPublicHolidayCategory, calculateMonthsWorked } from '../utils/initialData';
 import { 
   Users, 
   Search, 
@@ -23,6 +23,7 @@ import {
   ShieldCheck, 
   ChevronRight, 
   UserPlus, 
+  RefreshCw,
   X,
   CreditCard,
   Briefcase,
@@ -45,6 +46,7 @@ export const EmployeeDatabase: React.FC = () => {
     batchImportEmployees,
     transferEmployee,
     getAccruedALCount,
+    refreshData,
     getPHCount,
     getCombinedALDPCount,
     deleteResignedEmployee,
@@ -115,6 +117,7 @@ export const EmployeeDatabase: React.FC = () => {
 
   // Status message
   const [alertMsg, setAlertMsg] = useState('');
+  const [isRefreshing, setIsRefreshing] = useState(false);
 
   // Handle single contract date change to automatically default the expiration end date (1 year after)
   const handleSignDateChange = (dateVal: string) => {
@@ -129,6 +132,20 @@ export const EmployeeDatabase: React.FC = () => {
       signDate: dateVal,
       contractEndDate: endStr
     });
+  };
+
+  const handleRefresh = async () => {
+    setIsRefreshing(true);
+    
+    // Memanggil fungsi refresh dari context jika tersedia
+    if (typeof refreshData === 'function') {
+      await refreshData();
+    }
+
+    setTimeout(() => {
+      setIsRefreshing(false);
+      showAlert('Data tabel berhasil disinkronkan dengan database.');
+    }, 800);
   };
 
   // Maps outlets and depts helpers
@@ -375,6 +392,16 @@ export const EmployeeDatabase: React.FC = () => {
             <Download className="w-4 h-4 text-emerald-600" />
             <span>Download CSV (Excel)</span>
           </button>
+
+          <button
+            id="btn-refresh-db"
+            onClick={handleRefresh}
+            disabled={isRefreshing}
+            className="flex items-center space-x-1.5 bg-white hover:bg-slate-50 text-slate-700 font-sans text-xs font-semibold px-3.5 py-2.5 rounded-lg border border-slate-200 transition-all cursor-pointer disabled:opacity-50"
+          >
+            <RefreshCw className={`w-4 h-4 text-indigo-600 ${isRefreshing ? 'animate-spin' : ''}`} />
+            <span>Refresh</span>
+          </button>
         </div>
       </div>
 
@@ -500,7 +527,7 @@ export const EmployeeDatabase: React.FC = () => {
                   <th className="p-3">DEPARTEMEN</th>
                   <th className="p-3">GENDER / AGAMA</th>
                   <th className="p-3 text-center">AL ACCRUED (BACKSTAGE)</th>
-                  <th className="p-3 text-center">PH (PUBLIC HOLIDAY)</th>
+                  <th className="p-3 text-center uppercase">DP (Delay Pass)</th>
                   <th className="p-3 text-center">AL+DP TOTAL BALANCE</th>
                   <th className="p-3 text-center">TMT KONTRAK SELESAI</th>
                   <th className="p-3 text-right">AKSI ADMINISTRATOR</th>
@@ -515,8 +542,9 @@ export const EmployeeDatabase: React.FC = () => {
                   </tr>
                 ) : (
                   filteredEmployees.map((emp) => {
-                    const accruedAL = getAccruedALCount(emp);
-                    const publicHolidayPH = getPHCount(emp);
+                    // Menghitung AL Real berdasarkan masa kerja (TMT)
+                    const accruedAL = calculateMonthsWorked(emp.startingDate);
+                    
                     const totalALDP = getCombinedALDPCount(emp);
                     const isSoonExpiring = new Date(emp.contractEndDate).getTime() - new Date('2026-06-15').getTime() < 30 * 24 * 60 * 60 * 1000;
 
@@ -548,8 +576,8 @@ export const EmployeeDatabase: React.FC = () => {
                           <span className="text-emerald-600 font-mono">+{accruedAL} AL</span>
                         </td>
                         <td className="p-3 text-center">
-                          <span className="font-semibold font-mono text-xs text-indigo-650">
-                            {publicHolidayPH} PH
+                          <span className="font-extrabold font-mono text-xs text-indigo-600">
+                            {emp.dpBalance} DP
                           </span>
                         </td>
                         <td className="p-3 text-center">
@@ -824,16 +852,20 @@ export const EmployeeDatabase: React.FC = () => {
             <div className="p-6 overflow-y-auto flex-1 space-y-6 text-xs text-slate-300">
               
               {/* Stats Highlights */}
+              {(() => {
+                const previewAccruedAL = calculateMonthsWorked(previewEmp.startingDate);
+                
+                return (
               <div className="grid grid-cols-3 gap-3 bg-slate-950 p-4 border border-slate-850 rounded-xl text-center">
                 <div className="p-2 bg-slate-900/50 border border-slate-850 rounded-lg">
                   <span className="block text-[9px] font-mono text-slate-450 uppercase mb-0.5">AL Accrued</span>
-                  <span className="font-bold text-white text-base">+{getAccruedALCount(previewEmp)} AL</span>
+                  <span className="font-bold text-white text-base">+{previewAccruedAL} AL</span>
                   <p className="text-[8px] text-slate-500 mt-0.5 font-sans leading-none">dari tgl masuk</p>
                 </div>
                 <div className="p-2 bg-slate-900/50 border border-slate-850 rounded-lg">
-                  <span className="block text-[9px] font-mono text-slate-450 uppercase mb-0.5">Public Holiday PH</span>
-                  <span className="font-bold text-white text-base">{getPHCount(previewEmp)} PH</span>
-                  <p className="text-[8px] text-slate-500 mt-0.5 font-sans leading-none">berdasarkan pilihan PH</p>
+                  <span className="block text-[9px] font-mono text-slate-450 uppercase mb-0.5">Delay Pass (DP)</span>
+                  <span className="font-bold text-white text-base">{previewEmp.dpBalance} DP</span>
+                  <p className="text-[8px] text-indigo-400 mt-0.5 font-sans leading-none uppercase font-bold">Saldo Saat Ini</p>
                 </div>
                 <div className="p-2 bg-slate-900/50 border border-slate-850 rounded-lg">
                   <span className="block text-[9px] font-mono text-slate-405 uppercase mb-0.5">Sisa AL+DP</span>
@@ -841,6 +873,8 @@ export const EmployeeDatabase: React.FC = () => {
                   <p className="text-[8px] text-slate-500 mt-0.5 font-sans leading-none">AL={previewEmp.alBalance} DP={previewEmp.dpBalance}</p>
                 </div>
               </div>
+                );
+              })()}
 
               {/* Grid sections info */}
               <div className="grid grid-cols-2 gap-6">
