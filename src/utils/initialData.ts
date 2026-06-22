@@ -152,12 +152,17 @@ export function isDatePHForEmployee(dateStr: string, publicHolidayCategory: Holi
 }
 
 /**
- * Calculate dynamic schedule metrics like al- (taking AL), dp- (taking DP), and dp+ (working on a PH date)
+ * Calculate dynamic schedule metrics like al- (taking AL), dp- (taking DP), dp+ (working on a PH date),
+ * and al+ (accrual this period based on TMT vs period start).
+ *
+ * AL+ = 1 jika TMT karyawan <= awal periode (full month), 0 jika TMT > awal periode (mid-month).
  */
 export function calculateRosterStats(
   dates: { [dateStr: string]: string },
   publicHolidayCategory: HolidayCategory,
-  holidays: PublicHoliday[]
+  holidays: PublicHoliday[],
+  employeeStartDate?: string,
+  periodStartDate?: string
 ) {
   let alMinus = 0;
   let dpMinus = 0;
@@ -176,7 +181,17 @@ export function calculateRosterStats(
     }
   });
 
-  return { alMinus, dpMinus, dpPlus };
+  // Calculate AL+: 1 if TMT <= period start (full month), 0 if joining mid-period
+  let alPlus = 1; // default
+  if (employeeStartDate && periodStartDate) {
+    const start = new Date(employeeStartDate);
+    const periodStart = new Date(periodStartDate);
+    if (!isNaN(start.getTime()) && !isNaN(periodStart.getTime())) {
+      alPlus = start <= periodStart ? 1 : 0;
+    }
+  }
+
+  return { alMinus, dpMinus, dpPlus, alPlus };
 }
 
 /**

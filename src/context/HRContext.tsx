@@ -80,9 +80,10 @@ interface HRContextProps {
   batchUpdateSchedule: (
     departmentId: string,
     periodId: string,
-    updates: { employeeId: string; dateStr: string; shiftVal: string }[]
+    updates: { employeeId: string; dateStr: string; shiftVal: string }[],
+    periodStartDate?: string
   ) => void;
-  updateSchedule: (departmentId: string, periodId: string, employeeId: string, dateStr: string, shiftVal: string) => void;
+  updateSchedule: (departmentId: string, periodId: string, employeeId: string, dateStr: string, shiftVal: string, periodStartDate?: string) => void;
   updateScheduleLeaverBalances: (
     departmentId: string,
     periodId: string,
@@ -542,7 +543,7 @@ export const HRProvider: React.FC<{ children: React.ReactNode }> = ({ children }
         emergencyContact: partial.emergencyContact || '-',
         relationship: partial.relationship || '-',
         references: partial.references || '-',
-        alBalance: partial.alBalance !== undefined ? partial.alBalance : 12,
+        alBalance: partial.alBalance !== undefined ? partial.alBalance : 0,
         dpBalance: partial.dpBalance !== undefined ? partial.dpBalance : 0,
         signDate: partial.signDate || '2026-01-01',
         contractEndDate: partial.contractEndDate || '2027-01-01',
@@ -694,11 +695,56 @@ export const HRProvider: React.FC<{ children: React.ReactNode }> = ({ children }
   const batchUpdateSchedule = (
     departmentId: string,
     periodId: string,
-    updates: { employeeId: string; dateStr: string; shiftVal: string }[]
+    updates: { employeeId: string; dateStr: string; shiftVal: string }[],
+    periodStartDate?: string
   ) => {
     setSchedules(prevSchedules => {
       const schedIndex = prevSchedules.findIndex(s => s.departmentId === departmentId && s.periodId === periodId);
-      if (schedIndex === -1) return prevSchedules;
+      
+      if (schedIndex === -1) {
+        // Create a brand new schedule for this department+period combo
+        const newEntries: DepartmentSchedule['entries'] = {};
+
+        updates.forEach(({ employeeId, dateStr, shiftVal }) => {
+          // Build cumulative dates for this employee across all updates
+          const existing = newEntries[employeeId];
+          const currentDates = existing?.dates || {};
+          const updatedDates = { ...currentDates, [dateStr]: shiftVal };
+
+          const employeeObj = employees.find(e => e.id === employeeId);
+          const phCategory = employeeObj?.publicHolidayCategory ?? getDefaultPublicHolidayCategory(employeeObj?.religion ?? 'Other');
+
+          const stats = calculateRosterStats(
+            updatedDates,
+            phCategory,
+            publicHolidays,
+            employeeObj?.startingDate,
+            periodStartDate || currentPeriod.startDate
+          );
+
+          newEntries[employeeId] = {
+            employeeId,
+            dates: updatedDates,
+            alPrev: 0,
+            alMinus: stats.alMinus,
+            alPlus: stats.alPlus,
+            dpPrev: 0,
+            dpMinus: stats.dpMinus,
+            dpPlus: stats.dpPlus
+          };
+        });
+
+        const newSchedId = `SCHED_${departmentId}_${periodId}`;
+        const newSched: DepartmentSchedule = {
+          id: newSchedId,
+          periodId,
+          departmentId,
+          entries: newEntries
+        };
+
+        fireStoreSave('schedules', newSchedId, newSched);
+        return [...prevSchedules, newSched];
+      }
 
       const targetSched = prevSchedules[schedIndex];
       const nextEntries = { ...targetSched.entries };
@@ -707,7 +753,7 @@ export const HRProvider: React.FC<{ children: React.ReactNode }> = ({ children }
         const employeeEntry = nextEntries[employeeId] || {
           employeeId,
           dates: {},
-          alPrev: 12, alMinus: 0, alPlus: 0,
+          alPrev: 0, alMinus: 0, alPlus: 0,
           dpPrev: 0, dpMinus: 0, dpPlus: 0
         };
 
@@ -715,12 +761,13 @@ export const HRProvider: React.FC<{ children: React.ReactNode }> = ({ children }
         const employeeObj = employees.find(e => e.id === employeeId);
         const phCategory = employeeObj?.publicHolidayCategory ?? getDefaultPublicHolidayCategory(employeeObj?.religion ?? 'Other');
 
-        const stats = calculateRosterStats(updatedDates, phCategory, publicHolidays);
+        const stats = calculateRosterStats(updatedDates, phCategory, publicHolidays, employeeObj?.startingDate, periodStartDate || currentPeriod.startDate);
 
         nextEntries[employeeId] = {
           ...employeeEntry,
           dates: updatedDates,
           alMinus: stats.alMinus,
+          alPlus: stats.alPlus,
           dpMinus: stats.dpMinus,
           dpPlus: stats.dpPlus
         };
@@ -740,50 +787,91 @@ export const HRProvider: React.FC<{ children: React.ReactNode }> = ({ children }
     periodId: string,
     employeeId: string,
     dateStr: string,
-    shiftVal: string
+    shiftVal: string,
+    periodStartDate?: string
   ) => {
-    const nextSchedules = schedules.map(sched => {
-      if (sched.departmentId === departmentId && sched.periodId === periodId) {
-        const employeeEntry = sched.entries[employeeId] || {
-          employeeId,
-          dates: {},
-          alPrev: 12,
-          alMinus: 0,
-          alPlus: 0,
-          dpPrev: 0,
-          dpMinus: 0,
-          dpPlus: 0
-        };
+    const existingIndex = schedules.findIndex(s => s.departmentId === departmentId && s.periodId === periodId);
+    
+    if (existingIndex === -1) {
+      // Create a brand new schedule for this department+period combo
+      const employeeObj = employees.find(e => e.id === employeeId);
+      const publicHolidayCategory = employeeObj?.publicHolidayCategory ?? getDefaultPublicHolidayCategory(employeeObj?.religion ?? 'Other');
 
-        const updatedDates = { ...employeeEntry.dates, [dateStr]: shiftVal };
-        const employeeObj = employees.find(e => e.id === employeeId);
-        const publicHolidayCategory = employeeObj?.publicHolidayCategory ?? getDefaultPublicHolidayCategory(employeeObj?.religion ?? 'Other');
+      const stats = calculateRosterStats(
+        { [dateStr]: shiftVal },
+        publicHolidayCategory,
+        publicHolidays,
+        employeeObj?.startingDate,
+        periodStartDate || currentPeriod.startDate
+      );
 
-        const stats = calculateRosterStats(updatedDates, publicHolidayCategory, publicHolidays);
-
-        const updatedEntry = {
-          ...employeeEntry,
-          dates: updatedDates,
-          alMinus: stats.alMinus,
-          dpMinus: stats.dpMinus,
-          dpPlus: stats.dpPlus
-        };
-
-        const uSched = {
-          ...sched,
-          entries: {
-            ...sched.entries,
-            [employeeId]: updatedEntry
+      const newSchedId = `SCHED_${departmentId}_${periodId}`;
+      const newSched: DepartmentSchedule = {
+        id: newSchedId,
+        periodId,
+        departmentId,
+        entries: {
+          [employeeId]: {
+            employeeId,
+            dates: { [dateStr]: shiftVal },
+            alPrev: 0,
+            alMinus: stats.alMinus,
+            alPlus: stats.alPlus,
+            dpPrev: 0,
+            dpMinus: stats.dpMinus,
+            dpPlus: stats.dpPlus
           }
-        };
+        }
+      };
 
-        fireStoreSave('schedules', uSched.id, uSched);
-        return uSched;
-      }
-      return sched;
-    });
+      fireStoreSave('schedules', newSchedId, newSched);
+      setSchedules([...schedules, newSched]);
+    } else {
+      // Update existing schedule
+      const nextSchedules = schedules.map(sched => {
+        if (sched.departmentId === departmentId && sched.periodId === periodId) {
+          const employeeEntry = sched.entries[employeeId] || {
+            employeeId,
+            dates: {},
+            alPrev: 0,
+            alMinus: 0,
+            alPlus: 0,
+            dpPrev: 0,
+            dpMinus: 0,
+            dpPlus: 0
+          };
 
-    setSchedules(nextSchedules);
+          const updatedDates = { ...employeeEntry.dates, [dateStr]: shiftVal };
+          const employeeObj = employees.find(e => e.id === employeeId);
+          const publicHolidayCategory = employeeObj?.publicHolidayCategory ?? getDefaultPublicHolidayCategory(employeeObj?.religion ?? 'Other');
+
+          const stats = calculateRosterStats(updatedDates, publicHolidayCategory, publicHolidays, employeeObj?.startingDate, periodStartDate || currentPeriod.startDate);
+
+          const updatedEntry = {
+            ...employeeEntry,
+            dates: updatedDates,
+            alMinus: stats.alMinus,
+            alPlus: stats.alPlus,
+            dpMinus: stats.dpMinus,
+            dpPlus: stats.dpPlus
+          };
+
+          const uSched = {
+            ...sched,
+            entries: {
+              ...sched.entries,
+              [employeeId]: updatedEntry
+            }
+          };
+
+          fireStoreSave('schedules', uSched.id, uSched);
+          return uSched;
+        }
+        return sched;
+      });
+
+      setSchedules(nextSchedules);
+    }
   };
 
   const updateScheduleLeaverBalances = (
@@ -797,7 +885,7 @@ export const HRProvider: React.FC<{ children: React.ReactNode }> = ({ children }
         const employeeEntry = sched.entries[employeeId] || {
           employeeId,
           dates: {},
-          alPrev: 12,
+          alPrev: 0,
           alMinus: 0,
           alPlus: 0,
           dpPrev: 0,

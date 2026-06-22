@@ -5,7 +5,7 @@
 
 import React from 'react';
 import { useHR } from '../context/HRContext';
-import { Users, Landmark, Calendar, Sparkles, Building2, HelpCircle, UserMinus } from 'lucide-react';
+import { Users, Calendar, Building2, HelpCircle, Clock } from 'lucide-react';
 
 interface DashboardProps {
   setCurrentTab: (tab: string) => void;
@@ -16,7 +16,6 @@ export const Dashboard: React.FC<DashboardProps> = ({ setCurrentTab }) => {
     employees, 
     traineeEmployees, 
     probationEmployees, 
-    resignedEmployees, 
     publicHolidays, 
     outlets, 
     departments, 
@@ -32,13 +31,13 @@ export const Dashboard: React.FC<DashboardProps> = ({ setCurrentTab }) => {
   const totalEmployees = employees.length;
   const totalTrainees = traineeEmployees ? traineeEmployees.length : 0;
   const totalProbation = probationEmployees ? probationEmployees.length : 0;
-  const totalResigned = resignedEmployees ? resignedEmployees.length : 0;
 
-  // Filter resigned employees for June 2026 (Simulated month)
-  const resignedThisMonth = resignedEmployees.filter(emp => {
-    if (!emp.resignationDate) return false;
-    const parts = emp.resignationDate.split('-');
-    return parts[0] === '2026' && parts[1] === '06';
+  // Filter employees whose contract ends within 60 days (15 Jun 2026 - 14 Aug 2026)
+  const CONTRACT_END_THRESHOLD = new Date('2026-08-14');
+  const contractEndingSoon = employees.filter(emp => {
+    if (!emp.contractEndDate) return false;
+    const endDate = new Date(emp.contractEndDate);
+    return endDate >= new Date('2026-06-15') && endDate <= CONTRACT_END_THRESHOLD;
   });
 
   // Employees per outlet
@@ -151,33 +150,33 @@ export const Dashboard: React.FC<DashboardProps> = ({ setCurrentTab }) => {
           </div>
         </div>
 
-        {/* Resigned Employees Card */}
+        {/* Contract Ending Soon Card */}
         <div className="bg-slate-900 border border-slate-800 p-6 rounded-xl flex items-center justify-between shadow-sm relative overflow-hidden group hover:border-slate-700 transition-all col-span-1">
           <div className="absolute left-0 top-0 w-2 h-full bg-rose-500"></div>
           <div className="flex-1 pr-2">
             <p className="text-[10px] font-mono font-bold text-slate-400 uppercase tracking-wider">
-              KARYAWAN RESIGN BULAN INI
+              KARYAWAN AKAN HABIS KONTRAK 60 HARI
             </p>
-            <h3 className="text-3xl font-extrabold text-white tracking-tight mt-1 animate-fade-in" id="resigned-employees-count">
-              {resignedThisMonth.length} <span className="text-xs font-medium text-slate-400 font-sans">Orang</span>
+            <h3 className="text-3xl font-extrabold text-white tracking-tight mt-1 animate-fade-in" id="contract-ending-count">
+              {contractEndingSoon.length} <span className="text-xs font-medium text-slate-400 font-sans">Orang</span>
             </h3>
             
             <div className="mt-2 space-y-1 text-[10.5px] font-mono text-slate-400 border-t border-slate-800/40 pt-1.5">
               <div className="flex justify-between pb-1">
-                <span>• Periode:</span>
-                <span className="text-slate-300 font-semibold font-sans text-[10px]">{MONTH_NAME}</span>
+                <span>• Rentang:</span>
+                <span className="text-slate-300 font-semibold font-sans text-[10px]">15 Jun - 14 Agu 2026</span>
               </div>
               
-              {resignedThisMonth.length === 0 ? (
+              {contractEndingSoon.length === 0 ? (
                 <div className="text-[10px] font-sans text-slate-500 italic mt-1 leading-snug">
-                  Tidak ada karyawan resign di periode Juni 2026.
+                  Tidak ada karyawan dengan kontrak akan habis dalam 60 hari ke depan.
                 </div>
               ) : (
                 <div className="space-y-1 font-sans text-[10px] max-h-[80px] overflow-y-auto mt-2">
-                  {resignedThisMonth.map(remp => (
-                    <div key={remp.id} className="flex justify-between items-center bg-slate-950/40 p-1.5 rounded border border-slate-850">
-                      <span className="font-semibold text-slate-200 truncate">{remp.name}</span>
-                      <span className="text-rose-400 font-mono text-[9px] shrink-0 font-bold">{remp.resignationDate}</span>
+                  {contractEndingSoon.map(emp => (
+                    <div key={emp.id} className="flex justify-between items-center bg-slate-950/40 p-1.5 rounded border border-slate-850">
+                      <span className="font-semibold text-slate-200 truncate">{emp.name}</span>
+                      <span className="text-rose-400 font-mono text-[9px] shrink-0 font-bold">{emp.contractEndDate}</span>
                     </div>
                   ))}
                 </div>
@@ -185,7 +184,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ setCurrentTab }) => {
             </div>
           </div>
           <div className="p-3 bg-slate-950 rounded-lg text-rose-450 border border-slate-850 self-start">
-            <UserMinus className="w-5 h-5 animate-pulse" />
+            <Clock className="w-5 h-5 animate-pulse" />
           </div>
         </div>
 

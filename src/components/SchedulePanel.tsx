@@ -18,6 +18,7 @@ import {
   X
 } from 'lucide-react';
 import { SchedulePeriod } from '../types';
+import { calculateMonthsWorked } from '../utils/initialData';
 
 export const AVAILABLE_PERIODS: SchedulePeriod[] = [
   {
@@ -92,12 +93,12 @@ export const SchedulePanel: React.FC = () => {
     return 'all';
   });
 
-  // Selected Department ID in UI
+  // Selected Department ID in UI ('all' = semua departemen)
   const [selectedDeptId, setSelectedDeptId] = useState<string>(() => {
     if (userSession?.role === 'head departement' && userSession?.departmentId) {
       return userSession.departmentId;
     }
-    return 'D1'; // Default FO
+    return 'all';
   });
 
   // Batch Upload States
@@ -139,13 +140,7 @@ export const SchedulePanel: React.FC = () => {
       setSelectedDeptId(userSession.departmentId);
       return;
     }
-
-    if (availableDepartments.length > 0) {
-      const exists = availableDepartments.some(d => d.id === selectedDeptId);
-      if (!exists) {
-        setSelectedDeptId(availableDepartments[0].id);
-      }
-    }
+    // For non-head users, default 'all' is always valid
   }, [availableDepartments, selectedDeptId, userSession]);
 
   // Highlighted Employee in editor view for fine-tuning balances
@@ -153,7 +148,7 @@ export const SchedulePanel: React.FC = () => {
 
   // Form states to adjust balances manually
   const [balanceForm, setBalanceForm] = useState({
-    alPrev: 12,
+    alPrev: 0,
     alMinus: 0,
     alPlus: 1,
     dpPrev: 0,
@@ -181,6 +176,7 @@ export const SchedulePanel: React.FC = () => {
   }, [userSession, selectedDeptId]);
 
   const activeDept = useMemo(() => {
+    if (activeDeptId === 'all') return null;
     return departments.find(d => d.id === activeDeptId);
   }, [departments, activeDeptId]);
 
@@ -191,7 +187,7 @@ export const SchedulePanel: React.FC = () => {
       : selectedOutletId;
 
     return employees.filter(emp => {
-      const matchDept = emp.departmentId === activeDeptId;
+      const matchDept = activeDeptId === 'all' || emp.departmentId === activeDeptId;
       const matchOutlet = targetOutlet === 'all' || emp.outletId === targetOutlet;
       return matchDept && matchOutlet;
     });
@@ -209,15 +205,18 @@ export const SchedulePanel: React.FC = () => {
     };
   }, [schedules, activeDeptId, selectedPeriod]);
 
-  // Handle cell shift dropdown value modification
+  // Handle cell shift input change - use employee's actual department when 'all' is selected
   const handleShiftChange = (employeeId: string, dateStr: string, val: string) => {
-    updateSchedule(activeDeptId, selectedPeriod.id, employeeId, dateStr, val);
+    const targetDeptId = activeDeptId === 'all'
+      ? employees.find(emp => emp.id === employeeId)?.departmentId || activeDeptId
+      : activeDeptId;
+    updateSchedule(targetDeptId, selectedPeriod.id, employeeId, dateStr, val, selectedPeriod.startDate);
   };
 
   // Select employee to manually override their prev/plus/minus properties
   const startEditingBalances = (empId: string) => {
     const entry = activeSchedule.entries[empId] || {
-      alPrev: 12, alMinus: 0, alPlus: 1,
+      alPrev: 0, alMinus: 0, alPlus: 1,
       dpPrev: 0, dpMinus: 0, dpPlus: 0
     };
     setSelectedEmployeeId(empId);
@@ -317,7 +316,21 @@ export const SchedulePanel: React.FC = () => {
       }
 
       if (updates.length > 0) {
-        batchUpdateSchedule(activeDeptId, selectedPeriod.id, updates);
+        // Group updates by employee's actual department when 'all' is selected
+        if (activeDeptId === 'all') {
+          const groupedUpdates: Record<string, { employeeId: string; dateStr: string; shiftVal: string }[]> = {};
+          for (const update of updates) {
+            const emp = employees.find(e => e.id === update.employeeId);
+            const deptId = emp?.departmentId || 'D1';
+            if (!groupedUpdates[deptId]) groupedUpdates[deptId] = [];
+            groupedUpdates[deptId].push(update);
+          }
+          for (const [deptId, deptUpdates] of Object.entries(groupedUpdates)) {
+            batchUpdateSchedule(deptId, selectedPeriod.id, deptUpdates, selectedPeriod.startDate);
+          }
+        } else {
+          batchUpdateSchedule(activeDeptId, selectedPeriod.id, updates, selectedPeriod.startDate);
+        }
       }
 
       alert('Roster berhasil diimpor secara massal!');
@@ -331,20 +344,6 @@ export const SchedulePanel: React.FC = () => {
     }
   };
 
-  // Available Shift Options Definition
-  const shiftTypes = [
-    { code: 'OFF', label: 'Off', bg: 'text-slate-500 border-slate-200 bg-slate-50' },
-    { code: 'AL', label: 'Cuti (AL)', bg: 'text-cyan-600 border-cyan-200 bg-cyan-50' },
-    { code: 'DP', label: 'Delay Pass (DP)', bg: 'text-amber-600 border-amber-200 bg-amber-50' },
-    { code: 'PH', label: 'Merah (PH)', bg: 'text-rose-600 border-rose-200 bg-rose-50' },
-    { code: 'A', label: 'Shift A', bg: 'text-slate-700 border-slate-200 bg-slate-50' },
-    { code: 'B', label: 'Shift B', bg: 'text-slate-700 border-slate-200 bg-slate-50' },
-    { code: 'C', label: 'Shift C', bg: 'text-slate-700 border-slate-200 bg-slate-50' },
-    { code: 'D', label: 'Shift D', bg: 'text-slate-700 border-slate-200 bg-slate-50' },
-    { code: 'E', label: 'Shift E', bg: 'text-slate-700 border-slate-200 bg-slate-50' },
-    { code: 'F', label: 'Shift F', bg: 'text-slate-700 border-slate-200 bg-slate-50' },
-    { code: 'G', label: 'Shift G', bg: 'text-slate-700 border-slate-200 bg-slate-50' }
-  ];
 
   return (
     <div className="space-y-6" id="schedule-panel-container">
@@ -488,11 +487,14 @@ export const SchedulePanel: React.FC = () => {
                 {availableDepartments.length === 0 ? (
                   <option value="" disabled>Tidak ada departemen aktif</option>
                 ) : (
-                  availableDepartments.map(d => (
-                    <option key={d.id} value={d.id}>
-                      {d.name}
-                    </option>
-                  ))
+                  <>
+                    <option value="all">Semua Departemen</option>
+                    {availableDepartments.map(d => (
+                      <option key={d.id} value={d.id}>
+                        {d.name}
+                      </option>
+                    ))}
+                  </>
                 )}
               </select>
             )}
@@ -521,16 +523,17 @@ export const SchedulePanel: React.FC = () => {
         <div className="p-4 bg-slate-50 border-b border-slate-200 flex flex-wrap gap-3 items-center justify-between">
           <span className="text-[11px] font-mono font-bold text-slate-700 uppercase tracking-wide flex items-center gap-1.5">
             <CalendarCheck className="w-4 h-4 text-cyan-600" />
-            Tabel Jadwal - {activeDept?.name} ({deptEmployees.length} Staff)
+            Tabel Jadwal - {activeDept?.name || 'Semua Departemen'} ({deptEmployees.length} Staff)
           </span>
 
           {/* Quick Legend Tags */}
           <div className="flex flex-wrap gap-2 text-[10px]">
-            {shiftTypes.map(st => (
-              <span key={st.code} className={`px-1.5 py-0.5 rounded border border-slate-200/60 font-mono font-bold ${st.bg}`} title={st.label}>
-                {st.code}: {st.label.split(' (')[0]}
-              </span>
-            ))}
+            <span className="px-1.5 py-0.5 rounded border border-slate-200/60 font-mono font-bold text-slate-500">OFF: Libur</span>
+            <span className="px-1.5 py-0.5 rounded border border-slate-200/60 font-mono font-bold text-cyan-600">AL: Cuti</span>
+            <span className="px-1.5 py-0.5 rounded border border-slate-200/60 font-mono font-bold text-amber-600">DP: Delay Pass</span>
+            <span className="px-1.5 py-0.5 rounded border border-slate-200/60 font-mono font-bold text-rose-600">PH: Merah</span>
+            <span className="px-1.5 py-0.5 rounded border border-slate-200/60 font-mono font-bold text-slate-700">A-Z: Shift</span>
+            <span className="px-1.5 py-0.5 rounded border border-slate-200/60 font-mono font-bold text-slate-400 italic">BJ: Belum Join</span>
           </div>
         </div>
 
@@ -584,13 +587,37 @@ export const SchedulePanel: React.FC = () => {
               {/* Body */}
               <tbody className="divide-y divide-slate-200 bg-white font-sans text-xs text-slate-700">
                 {deptEmployees.map(emp => {
-                  const entry = activeSchedule.entries[emp.id] || {
+                  // Calculate AL+ dynamically: 1 if TMT <= period start, 0 if mid-period
+                  const defaultAlPlus = (() => {
+                    const tmt = new Date(emp.startingDate);
+                    const periodStart = new Date(selectedPeriod.startDate);
+                    if (!isNaN(tmt.getTime()) && !isNaN(periodStart.getTime())) {
+                      return tmt <= periodStart ? 1 : 0;
+                    }
+                    return 1;
+                  })();
+
+                  // Determine default AL/DP prev: 0 if employee hasn't worked 1 full month before period starts
+                  const defaultAlPrev = emp.startingDate && selectedPeriod.startDate
+                    ? (calculateMonthsWorked(emp.startingDate, selectedPeriod.startDate) < 1 ? 0 : emp.alBalance)
+                    : emp.alBalance;
+                  const defaultDpPrev = emp.startingDate && selectedPeriod.startDate
+                    ? (calculateMonthsWorked(emp.startingDate, selectedPeriod.startDate) < 1 ? 0 : emp.dpBalance)
+                    : emp.dpBalance;
+
+                  const rawEntry = activeSchedule.entries[emp.id];
+                  const entry = rawEntry ? {
+                    ...rawEntry,
+                    alPrev: defaultAlPrev,
+                    dpPrev: defaultDpPrev,
+                    alPlus: defaultAlPlus,
+                  } : {
                     employeeId: emp.id,
                     dates: {},
-                    alPrev: emp.alBalance,
+                    alPrev: defaultAlPrev,
                     alMinus: 0,
-                    alPlus: 1,
-                    dpPrev: emp.dpBalance,
+                    alPlus: defaultAlPlus,
+                    dpPrev: defaultDpPrev,
                     dpMinus: 0,
                     dpPlus: 0,
                   };
@@ -617,7 +644,13 @@ export const SchedulePanel: React.FC = () => {
 
                       {/* Day cells calendar view placed right after name */}
                       {datesList.map(dateStr => {
-                        const shiftVal = entry.dates[dateStr] || 'OFF';
+                        // Check if this date is BEFORE the employee's TMT (Belum Join)
+                        // Guard: if startingDate is undefined/null/empty, treat as not-before-TMT (editable)
+                        const isBeforeTMT = emp.startingDate ? dateStr < emp.startingDate : false;
+                        
+                        // Determine display value: BJ before TMT, empty if no entry, saved value otherwise
+                        const savedVal = entry.dates[dateStr] || '';
+                        const displayVal = isBeforeTMT ? 'BJ' : savedVal;
                         
                         // Check if this date is a Public Holiday applicable to this specific employee based on their religion
                         const phHolidayObj = publicHolidays.find(ph => 
@@ -625,12 +658,15 @@ export const SchedulePanel: React.FC = () => {
                         );
                         const isEmployeePH = !!phHolidayObj;
 
-                        // Font sizing and coloring (clean background)
-                        let styleClass = 'text-slate-800 font-bold';
-                        if (shiftVal === 'OFF') styleClass = 'text-slate-400 font-normal';
-                        else if (shiftVal === 'AL') styleClass = 'text-cyan-600 font-extrabold';
-                        else if (shiftVal === 'DP') styleClass = 'text-amber-600 font-extrabold';
-                        else if (shiftVal === 'PH') styleClass = 'text-rose-600 font-extrabold';
+                        // Dynamic color based on shift value
+                        let textColor = 'text-slate-800 font-bold';
+                        const upperVal = displayVal.toUpperCase();
+                        if (upperVal === 'BJ') textColor = 'text-slate-400 italic font-normal';
+                        else if (upperVal === 'OFF') textColor = 'text-slate-400 font-normal';
+                        else if (upperVal === 'AL') textColor = 'text-cyan-600 font-extrabold';
+                        else if (upperVal === 'DP') textColor = 'text-amber-600 font-extrabold';
+                        else if (upperVal === 'PH') textColor = 'text-rose-600 font-extrabold';
+                        else if (upperVal === '') textColor = 'text-slate-300 italic font-normal';
 
                         // If it's a PH for this employee, highlight the cell border
                         const borderStyle = isEmployeePH 
@@ -641,25 +677,21 @@ export const SchedulePanel: React.FC = () => {
                           <td 
                             key={dateStr} 
                             className={`p-1 text-center font-mono select-none h-11 bg-white ${borderStyle}`}
-                            title={`${emp.name} - ${dateStr}${phHolidayObj ? ` (${phHolidayObj.category}: ${phHolidayObj.name})` : ''}`}
+                            title={`${emp.name} - ${dateStr}${isBeforeTMT ? ' (Belum Join)' : ''}${phHolidayObj ? ` (${phHolidayObj.category}: ${phHolidayObj.name})` : ''}`}
                           >
-                            <select
-                              value={shiftVal}
-                              onChange={(e) => handleShiftChange(emp.id, dateStr, e.target.value)}
-                              className={`schedule-cell-select bg-transparent text-[11px] font-bold text-center w-full border-none outline-none focus:ring-0 cursor-pointer appearance-none p-0 inline-block h-6 ${styleClass}`}
-                            >
-                              <option value="OFF" className="bg-white text-slate-400 font-normal">OFF</option>
-                              <option value="DP" className="bg-white text-amber-600 font-extrabold">DP</option>
-                              <option value="AL" className="bg-white text-cyan-600 font-extrabold">AL</option>
-                              <option value="PH" className="bg-white text-rose-600 font-extrabold">PH</option>
-                              <option value="A" className="bg-white text-slate-800 font-bold">A</option>
-                              <option value="B" className="bg-white text-slate-800 font-bold">B</option>
-                              <option value="C" className="bg-white text-slate-800 font-bold">C</option>
-                              <option value="D" className="bg-white text-slate-800 font-bold">D</option>
-                              <option value="E" className="bg-white text-slate-800 font-bold">E</option>
-                              <option value="F" className="bg-white text-slate-800 font-bold">F</option>
-                              <option value="G" className="bg-white text-slate-800 font-bold">G</option>
-                            </select>
+                            {isBeforeTMT ? (
+                              <span className={`inline-block w-full text-[11px] font-bold text-center h-6 leading-6 ${textColor}`}>
+                                BJ
+                              </span>
+                            ) : (
+                              <input
+                                type="text"
+                                value={displayVal}
+                                onChange={(e) => handleShiftChange(emp.id, dateStr, e.target.value.toUpperCase())}
+                                className={`schedule-cell-input bg-transparent text-[11px] font-bold text-center w-full border-none outline-none focus:ring-1 focus:ring-indigo-300 rounded h-6 p-0 ${textColor}`}
+                                maxLength={4}
+                              />
+                            )}
                             {isEmployeePH && (
                               <div className="text-[7px] text-rose-600 font-extrabold -mt-1 scale-90 leading-none" title={phHolidayObj.name}>
                                 PH

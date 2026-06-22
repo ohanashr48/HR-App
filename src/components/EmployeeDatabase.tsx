@@ -97,7 +97,7 @@ export const EmployeeDatabase: React.FC = () => {
     emergencyContact: '',
     relationship: '',
     references: '',
-    alBalance: 12,
+    alBalance: 0,
     dpBalance: 0,
     signDate: '2026-01-01',
     contractEndDate: '2027-01-01',
@@ -361,7 +361,7 @@ export const EmployeeDatabase: React.FC = () => {
                 publicHolidayCategory: 'Hindu',
                 nikPassport: '', noKK: '', noHandphone: '', noBpjsKes: '', noBpjsTk: '', birthPlace: '', birthDate: '1995-01-01',
                 motherFullName: '', lastEducation: 'SMA', address: '', email: '', emergencyContact: '', relationship: '', references: '',
-                alBalance: 12, dpBalance: 0, signDate: '2026-06-15', contractEndDate: '2027-06-15', outletId: 'O1', departmentId: 'D1'
+                alBalance: 0, dpBalance: 0, signDate: '2026-06-15', contractEndDate: '2027-06-15', outletId: 'O1', departmentId: 'D1'
               });
               setShowSingleEntryForm(true);
             }}
